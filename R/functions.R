@@ -1,7 +1,7 @@
 relabel_outcomes <- function(data, var, reverse = FALSE) {
-  labs <- rbind(c("cwar", "Civil War (UCDP)"),
-                c("cwar.civil.war", "Civil War (UCDP)"),
-                c("civil.war", "Civil War (UCDP)"),
+  labs <- rbind(c("cwar", "Civil Conflict (UCDP)"),
+                c("cwar.civil.war", "Civil Conflict (UCDP)"),
+                c("civil.war", "Civil Conflict (UCDP)"),
                 c("ns_fat", "Non-State Conflict (fatalities, UCDP)"),
                 c("osv_fat", "One Sided Violence (fatalities, UCDP)"),
                 c("latent_mean", "Respect for Physical Integrity\n (Fariss, posterior mean)"),

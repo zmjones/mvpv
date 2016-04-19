@@ -1,6 +1,6 @@
-#PBS -l nodes=5
+#PBS -l nodes=20
 #PBS -l walltime=24:00:00
-#PBS -l pmem=16gb
+#PBS -l pmem=24gb
 #PBS -j oe
 #PBS -A open
 cd work/mvpv

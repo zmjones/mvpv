@@ -6,7 +6,7 @@ pkgs <- c("party", "edarf", "plyr", "dplyr", "reshape2", "stringr", "ggplot2", "
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 ## use cli arg for this
-cl <- makePSOCKcluster(5)
+cl <- makePSOCKcluster(20)
 registerDoParallel(cl)
 
 path <- unlist(str_split(getwd(), "/"))
@@ -37,7 +37,7 @@ df <- df[apply(df[, outcomes], 1, function(x) !any(is.na(x))), ]
 ## set up arguments for estimation
 ## no tuning for now
 ## stratified bootstrap by country
-control <- cforest_unbiased(mtry = 3, ntree = 500, trace = FALSE)
+control <- cforest_unbiased(mtry = 3, ntree = 1000, trace = FALSE)
 ccodes <- unique(df$ccode)
 weights <- sapply(1:control@ntree, function(x) {
   tab <- table(sample(ccodes, length(ccodes), TRUE))
@@ -45,11 +45,11 @@ weights <- sapply(1:control@ntree, function(x) {
 })
 weights[is.na(weights)] <- 0
 
-out <- foreach(x = regime_variables, .packages = c("party", "edarf", "reshape2")) %dopar% {
+out <- foreach(x = regime_variables, .packages = c("party", "edarf", "reshape2")) %do% {
   form <- paste0(paste0(outcomes, collapse = "+"), "~", paste0(c(explanatory_variables, x), collapse = "+"))
   fit <- cforest(as.formula(form), data = df, weights = weights, controls = control)
-  pd <- partial_dependence(fit, df, var = x, cutoff = 20)
-  pd_int <- partial_dependence(fit, df, var = c(x, "year"), cutoff = 20, interaction = TRUE)
+  pd <- partial_dependence(fit, df, var = x, cutoff = 20, parallel = TRUE)
+  pd_int <- partial_dependence(fit, df, var = c(x, "year"), cutoff = 30, interaction = TRUE, parallel = TRUE)
   list(
     "fit" = fit,
     "pd" = pd, "pd_int" = pd_int,
@@ -58,7 +58,7 @@ out <- foreach(x = regime_variables, .packages = c("party", "edarf", "reshape2")
   )
 }
 names(out) <- regime_variables
-save(out, file = "../output/results.RData")
+save(out, file = "results.RData")
 stopCluster(cl)
 
 invisible(lapply(out, function(x) {
@@ -82,11 +82,15 @@ invisible(lapply(out, function(x) {
     aggr <- aggr[, c("xpolity", "outcome", "value")]
     plt <- rbind(aggr, filter(plt, xpolity < -6))
   }
-  p <- ggplot(plt, aes_string(var, "value", group = "outcome"))
-  p <- p + geom_point() + geom_line()
+  outcomes <- unique(plt$outcome)[c(1,7,5,6,2,3,4,8,9)]
+  plt$outcome <- factor(plt$outcome, levels = outcomes)
+  p <- ggplot(plt, aes_string(var, "value", group = "outcome"))  
+  p <- p + geom_point()
+  if (var != "xpolity")
     p <- p + geom_line()
   p <- p + facet_wrap(~ outcome, scales = "free_y")
   p <- p + xlab(var_label) + ylab("Partial Prediction")
+  p <- p + theme_bw()
   ggsave(paste0("../figures/", var, ".png"), width = 11, height = 8)
 
   plt_int <- x$plt_int
@@ -102,20 +106,23 @@ invisible(lapply(out, function(x) {
       summarise(value = mean(value), xpolity = "observed")
     aggr <- aggr[, c("xpolity", "year", "outcome", "value")]
     plt_int <- rbind(aggr, filter(plt_int, xpolity < -6))
-  } 
+    plt_int[[var]] <- as.character(plt_int[[var]])
+  }
 
   for (y in unique(plt_int$outcome)) {
-    p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "value"))
-    p <- p + geom_point() + geom_line()
-    p <- p + facet_wrap(~ year)
-    p <- p + xlab(var_label) + ylab(y)
-    ggsave(paste0("../figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"), width = 11, height = 8)
+    ## p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "value"))
+    ## p <- p + geom_point() + geom_line()
+    ## p <- p + facet_wrap(~ year)
+    ## p <- p + xlab(var_label) + ylab(y)
+    ## p <- p + theme_bw()
+    ## ggsave(paste0("../figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"), width = 11, height = 8)
 
     p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "year", z = "value"))
     p <- p + geom_tile(aes_string(fill = "value"))
-    p <- p + scale_fill_gradient2(space = "Lab", name = y)
+    p <- p + scale_fill_gradient(low = "white", high = "red", name = y)
     p <- p + guides(fill = guide_colorbar(barwidth = .75, barheight = 10, ticks = FALSE))
     p <- p + xlab(var_label) + ylab("Year")
+    p <- p + theme_bw()
     ggsave(paste0("../figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year_tile.png"),
            width = 11, height = 8)
   }

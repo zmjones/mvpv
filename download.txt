@@ -1,2 +1,1 @@
 results.RData
-figures/*
