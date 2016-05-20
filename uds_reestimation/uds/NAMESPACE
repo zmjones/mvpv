@@ -1,7 +1,0 @@
-useDynLib(uds)
-import(coda, MASS)
-
-export(mroprobit, prepare.uds, prepare.quantile, make.sigmasq.csv,
-       make.sigmasq.summary, make.gamma.csv, make.gamma.summary,
-       make.z.csv, make.z.summary, make.t.csv, make.t.summary, varpic,
-       cutpic, latentpic, pred.y, ppd.hist, concat.mcmc.list)

@@ -12,7 +12,7 @@ if (is.na(end_year)) {
   end_year <- 2008
 }
 
-pkgs <- c("dplyr", "assertthat", "rio", "countrycode", "stringr", "lubridate", "ggplot2")
+pkgs <- c("dplyr", "assertthat", "rio", "stringr", "lubridate", "ggplot2")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 source("functions.R")
@@ -26,10 +26,13 @@ assert_that(!anyDuplicated(xpolity))
 
 fariss <- import(paste0(data_prefix, "fariss.csv"))[, c(1:2,18:19)]
 colnames(fariss) <- c("ccode", "year", "latent_mean", "latent_sd")
+fariss$ccode <- as.integer(fariss$ccode)
 assert_that(!anyDuplicated(fariss))
 
-gtd <- import(paste0(data_prefix, "gtd.csv"))
-colnames(gtd)[3:4] <- c("terror_events", "terror_killed")
+gtd <- import(paste0(data_prefix, "gtd.csv")) %>%
+  select(year = iyear, ccode = country, nkill) %>%
+  group_by(ccode, year) %>%
+  summarise(terror_events = length(nkill), terror_killed = sum(nkill))
 assert_that(!anyDuplicated(gtd))
 
 mid <- import(paste0(data_prefix, "mid.csv"))[, c(4,7,10,18)]
@@ -37,14 +40,19 @@ mid <- expand_years(mid)
 mid <- mid %>% group_by(ccode, year) %>% summarize(max_hostlevel = max(HostLev, na.rm = TRUE))
 assert_that(!anyDuplicated(mid))
 
-ucdp_cwar <- import(paste0(data_prefix, "ucdp_cwar.dta"))
-colnames(ucdp_cwar)[2] <- "ccode"
-ucdp_cwar$ccode[ucdp_cwar$ccode == -99] <- NA
-ucdp_cwar <- rename(ucdp_cwar, cwar = ucdpcivilwar)
+ucdp_cwar <- import(paste0(data_prefix, "ucdp_cwar.csv")) %>%
+  filter(TypeOfConflict %in% 3:4) %>%
+  select(year = Year, ccode = GWNoLoc, int = IntensityLevel, incomp = Incompatibility) %>%
+  mutate(cwar = ifelse(int == 2, 1, 0),
+         cconflict = ifelse(int == 1, 1, 0)) %>%
+  select(year, ccode, cwar, cconflict) %>%
+  group_by(year, ccode) %>%
+  summarise(cwar = sum(cwar), cconflict = sum(cconflict))
+ucdp_cwar$ccode <- as.integer(ucdp_cwar$ccode)
 assert_that(!anyDuplicated(ucdp_cwar))
 
-ucdp_cwar <- import(paste0(data_prefix, "ucdp_cwar_types.dta"))
-colnames(ucdp_cwar)[2:5] <- c("ccode", "cwar", "cwar_territory", "cwar_government")
+## ucdp_cwar <- import(paste0(data_prefix, "ucdp_cwar_types.dta"))
+## colnames(ucdp_cwar)[2:5] <- c("ccode", "cwar", "cwar_territory", "cwar_government")
 ucdp_cwar$ccode[ucdp_cwar$ccode == -99] <- NA
 
 ucdp_ns <- import(paste0(data_prefix, "ucdp_ns.dta"))[, c(1,4,7,16:17,21)]
@@ -77,7 +85,8 @@ poly <- import(paste0(data_prefix, "polyarchy.dta"))[, c(2,4,6)]
 colnames(poly)[3] <- "ccode"
 assert_that(!anyDuplicated(poly))
 
-polity <- import(paste0(data_prefix, "polity.csv"))[, c(2,5,11,12:18)]
+polity <- import(paste0(data_prefix, "polity.csv"))
+polity <- polity %>% select(ccode, year, xrcomp, xropen, xrreg, parreg, xconst, durable)
 assert_that(!anyDuplicated(polity))
 
 gw <- read.delim(paste0(data_prefix, "iisystem.dat"), header = FALSE)
@@ -98,8 +107,8 @@ gw <- ungroup(gw)
 
 geddes <- import(paste0(data_prefix, "geddes.dta"))[, c(1:2,5)]
 colnames(geddes) <- c("ccode", "year", "geddes")
-geddes$ccode <- as.numeric(geddes$ccode)
-geddes$year <- as.numeric(geddes$year)
+geddes$ccode <- as.integer(geddes$ccode)
+geddes$year <- as.integer(geddes$year)
 assert_that(!anyDuplicated(geddes))
 
 ciri <- import(paste0(data_prefix, "ciri.csv"))[, c(2,4,10:13)]
@@ -124,15 +133,22 @@ assert_that(!anyDuplicated(epr_oil))
 
 fearon_elf <- import(paste0(data_prefix, "fearon_elf.csv"))
 names(fearon_elf)[1] <- "ccode"
+fearon_elf$ccode[fearon_elf$ccode == 255] <- 260
+fearon_elf$ccode[fearon_elf$ccode == 340] <- 345
+fearon_elf$ccode[fearon_elf$ccode == 678] <- 670
 
 idea <- import(paste0(data_prefix, "idea.dta"))
 colnames(idea)[2:4] <- c("ccode", "violent_protest", "nonviolent_protest")
+idea$year <- as.integer(idea$year)
+idea$ccode <- as.integer(idea$ccode)
 assert_that(!anyDuplicated(idea))
 
-df <- Reduce(function(x, y) left_join(x, y, by = c("ccode", "year")),
-             list(gw, fariss, gtd, mid, ucdp_cwar, ucdp_ns, ucdp_osv,
+data_list <- list(gw, fariss, gtd, mid, ucdp_cwar, ucdp_ns, ucdp_osv,
                   uds, uds_xpolity, poly, polity, geddes, ciri, ksg, epr_exclpop,
-                  epr_oil, idea, xpolity))
+                  epr_oil, idea, xpolity)
+data_list <- lapply(data_list, function(x) ccode_fix(x))
+
+df <- Reduce(function(x, y) left_join(x, y, by = c("ccode", "year")), data_list)
 df <- left_join(df, fearon_elf, by = "ccode")
 df <- df[!duplicated(df), ] ## not sure where this is coming from, investigate further
 assert_that(!anyDuplicated(df))
@@ -142,6 +158,7 @@ df$max_hostlevel[is.na(df$max_hostlevel)] <- 0
 df$ns_fat[is.na(df$ns_fat)] <- 0
 df$osv_fat[is.na(df$osv_fat)] <- 0
 df$cwar[is.na(df$cwar)] <- 0
+df$cconflict[is.na(df$cconflict)] <- 0
 df$terror_killed[is.na(df$terror_killed)] <- 0
 df$terror_events[is.na(df$terror_events)] <- 0
 df$violent_protest[is.na(df$violent_protest)] <- 0
@@ -176,11 +193,6 @@ df$tort[df$tort < 0 | df$tort > 2] <- NA
 
 df$geddes[is.na(df$geddes) | df$geddes == "NA"] <- "non-autocracy"
 df$geddes <- as.factor(df$geddes)
-
-df$cwar <- factor(df$cwar, labels = c("no civil war", "civil war"))
-df$cwar_territory <- factor(df$cwar_territory, labels = c("no terr. civil war", "terr. civil war"))
-df$cwar_government <- factor(df$cwar_government, labels = c("no gov. civil war", "gov. civil war"))
-
 df$max_hostlevel <- factor(df$max_hostlevel,
                            labels = c("no dispute",
                                       "no militarized action",
@@ -195,18 +207,10 @@ df$kill <- factor(df$kill, labels = ciri_labels, ordered = TRUE)
 df$polpris <- factor(df$polpris, labels = ciri_labels, ordered = TRUE)
 df$newstate <- factor(df$newstate, labels = c("not a recent entrant", "entry into system in last two years"))
 
-## df$cname <- countrycode(df$ccode, "cown", "country.name", TRUE)
-## miss_mapper(df, "disap", "disappearences", "disap_missing")
-## miss_mapper(df, "tort", "torture", "tort_missing")
-## miss_mapper(df, "kill", "killings", "kill_missing")
-## miss_mapper(df, "polpris", "political imprisonment", "polpris_missing")
-## miss_mapper(df, "latent_mean", "fariss missing", "fariss_missing")
-## miss_mapper(df, "cwar", "civil war missing", "cwar_missing")
-## miss_mapper(df, "max_hostlevel", "max hostility level missing", "max_hostlevel_missing")
-## miss_mapper(df, "terror_killed", "terrorist atacks missing", "terror_killed_missing")
-## miss_mapper(df, "terror_events", "terrorism deaths missing", "terror_events_missing")
-## miss_mapper(df, "ns_fat", "fatalities from ns missing", "ns_fat_missing")
-## miss_mapper(df, "osv_fat", "fatalities from osv missing", "osv_fat_missing")
+df <- df %>% group_by(ccode) %>%
+  mutate(d_part =  part - lag(part),
+         d_xpolity_nas = xpolity_nas - lag(xpolity_nas),
+         d_uds_xpolity = uds_xpolity - lag(uds_xpolity))
 
 out_file <- paste0(dir_prefix, "data/", "rep.csv")
 df <- df[df$year <= end_year & df$year >= start_year, ]

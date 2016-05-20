@@ -28,7 +28,7 @@ id <- c("ccode", "year")
 outcomes <- c("cwar", "max_hostlevel", "ns_fat", "osv_fat", "latent_mean",
               "terror_killed", "terror_events", "nonviolent_protest", "violent_protest")
 regime_variables <- c("part", "xpolity", "xpolity_nas", "uds_xpolity")
-explanatory_variables <- c("year", "rgdppc", "pop", "exclpop", "oilpc", "ethfrac", "newstate")
+explanatory_variables <- c("year", "rgdppc", "pop", "exclpop", "oilpc", "ethfrac", "newstate", "durable")
 
 dropped <- df[apply(df[, outcomes], 1, function(x) any(is.na(x))), ]
 write.csv(dropped, paste0(dir_prefix, "data/", "dropped_obs.csv"), row.names = FALSE)
@@ -91,7 +91,17 @@ invisible(lapply(out, function(x) {
   p <- p + facet_wrap(~ outcome, scales = "free_y")
   p <- p + xlab(var_label) + ylab("Partial Prediction")
   p <- p + theme_bw()
-  ggsave(paste0("../figures/", var, ".png"), width = 11, height = 8)
+  ggsave(paste0(dir_prefix, "figures/", var, ".png"), width = 11, height = 8)
+
+  for (y in unique(plt$outcome)) {
+    p <- ggplot(plt[plt$outcome == y, ], aes_string(var, "value"))
+    p <- p + geom_point()
+    if (var != "xpolity")
+      p <- p + geom_line()
+    p <- p + xlab(var_label) + ylab(y)
+    p <- p + theme_bw()
+    ggsave(paste0(dir_prefix, "figures/", relabel_outcomes(y, "", TRUE), "_", var, ".png"), width = 11, height = 8)
+  }
 
   plt_int <- x$plt_int
   plt_int <- plt_int[plt_int$outcome %in% c("civil.war", "ns_fat", "osv_fat", "latent_mean", "terror_killed",
@@ -110,20 +120,13 @@ invisible(lapply(out, function(x) {
   }
 
   for (y in unique(plt_int$outcome)) {
-    ## p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "value"))
-    ## p <- p + geom_point() + geom_line()
-    ## p <- p + facet_wrap(~ year)
-    ## p <- p + xlab(var_label) + ylab(y)
-    ## p <- p + theme_bw()
-    ## ggsave(paste0("../figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"), width = 11, height = 8)
-
     p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "year", z = "value"))
     p <- p + geom_tile(aes_string(fill = "value"))
     p <- p + scale_fill_gradient(low = "white", high = "red", name = y)
     p <- p + guides(fill = guide_colorbar(barwidth = .75, barheight = 10, ticks = FALSE))
     p <- p + xlab(var_label) + ylab("Year")
     p <- p + theme_bw()
-    ggsave(paste0("../figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year_tile.png"),
+    ggsave(paste0(dir_prefix, "figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"),
            width = 11, height = 8)
   }
 }))

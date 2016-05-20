@@ -1,3 +1,10 @@
+ccode_fix <- function(df) {
+  df$ccode[df$year >= 1991 & df$year <= 2008 & df$ccode == 255] <- 260
+  df$ccode[df$year >= 2006 & df$year <= 2008 & df$ccode == 340] <- 345
+  df$ccode[df$year >= 1991 & df$year <= 2008 & df$ccode == 678] <- 670
+  df
+}
+
 relabel_outcomes <- function(data, var, reverse = FALSE) {
   labs <- rbind(c("cwar", "Civil Conflict (UCDP)"),
                 c("cwar.civil.war", "Civil Conflict (UCDP)"),
