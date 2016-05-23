@@ -6,23 +6,22 @@ ccode_fix <- function(df) {
 }
 
 relabel_outcomes <- function(data, var, reverse = FALSE) {
-  labs <- rbind(c("cwar", "Civil Conflict (UCDP)"),
-                c("cwar.civil.war", "Civil Conflict (UCDP)"),
-                c("civil.war", "Civil Conflict (UCDP)"),
-                c("ns_fat", "Non-State Conflict (fatalities, UCDP)"),
-                c("osv_fat", "One Sided Violence (fatalities, UCDP)"),
+  labs <- rbind(c("cwar", "Civil War (sum)"),
+                c("cconflict", "Civil Conflict (sum)"),
+                c("ns_fat", "Non-State Conflict Fatalities"),
+                c("osv_fat", "One Sided Violence Fatalities"),
                 c("latent_mean", "Respect for Physical Integrity\n (Fariss, posterior mean)"),
-                c("terror_events", "Terrorist Attacks (GTD)"),
-                c("terror_killed", "Fatalities from Terrorist Attacks (GTD)"),
-                c("polpris", "Political Imprisonment (CIRI)"),
-                c("disap", "Disappearances (CIRI)"),
-                c("tort", "Torture (CIRI)"),
-                c("kill", "Extrajudicial Killings (CIRI)"),
-                c("max_hostlevel", "Maximum Hostility Level (MID IV)"),
-                c("nonviolent_protest", "Non-Violent Protest (IDEA)"),
-                c("violent_protest", "Violent Protest (IDEA)"),
-                c("max_hostlevel.use.of.force", "Use of Force (MID IV)"),
-                c("use.of.force", "Use of Force (MID IV)"))
+                c("terror_events", "Terrorist Attacks"),
+                c("terror_killed", "Fatalities from Terrorist Attacks"),
+                c("polpris", "Political Imprisonment"),
+                c("disap", "Disappearances"),
+                c("tort", "Torture"),
+                c("kill", "Extrajudicial Killings"),
+                c("max_hostlevel", "Maximum Hostility Level"),
+                c("nonviolent_protest", "Non-Violent Protest"),
+                c("violent_protest", "Violent Protest"),
+                c("max_hostlevel.use.of.force", "Use of Force"),
+                c("use.of.force", "Use of Force"))
   if (reverse)
     labs <- labs[, c(2, 1)]
   labs <- as.data.frame(labs, stringsAsFactors = FALSE)

@@ -25,9 +25,9 @@ df$xpolity <- factor(df$xpolity, ordered = TRUE)
 df$xpolity_nas <- factor(df$xpolity_nas, ordered = TRUE)
 
 id <- c("ccode", "year")
-outcomes <- c("cwar", "max_hostlevel", "ns_fat", "osv_fat", "latent_mean",
+outcomes <- c("cwar", "cconflict", "max_hostlevel", "ns_fat", "osv_fat", "latent_mean",
               "terror_killed", "terror_events", "nonviolent_protest", "violent_protest")
-regime_variables <- c("part", "xpolity", "xpolity_nas", "uds_xpolity")
+regime_variables <- c("part", "xpolity", "xpolity_nas", "uds_xpolity", "d_part", "d_xpolity_nas", "d_uds_xpolity")
 explanatory_variables <- c("year", "rgdppc", "pop", "exclpop", "oilpc", "ethfrac", "newstate", "durable")
 
 dropped <- df[apply(df[, outcomes], 1, function(x) any(is.na(x))), ]
@@ -48,8 +48,8 @@ weights[is.na(weights)] <- 0
 out <- foreach(x = regime_variables, .packages = c("party", "edarf", "reshape2")) %do% {
   form <- paste0(paste0(outcomes, collapse = "+"), "~", paste0(c(explanatory_variables, x), collapse = "+"))
   fit <- cforest(as.formula(form), data = df, weights = weights, controls = control)
-  pd <- partial_dependence(fit, df, var = x, cutoff = 20, parallel = TRUE)
-  pd_int <- partial_dependence(fit, df, var = c(x, "year"), cutoff = 30, interaction = TRUE, parallel = TRUE)
+  pd <- partial_dependence(fit, df, var = x, cutoff = 15, parallel = TRUE)
+  pd_int <- partial_dependence(fit, df, var = c(x, "year"), cutoff = 28, interaction = TRUE, parallel = TRUE)
   list(
     "fit" = fit,
     "pd" = pd, "pd_int" = pd_int,
@@ -65,12 +65,15 @@ invisible(lapply(out, function(x) {
   plt <- x$plt
   var <- colnames(plt)[1]
   var_label <- switch(var,
-                      "xpolity_nas" = "X-Polity IV (Vreeland)",
-                      "xpolity" = "X-Polity IV (Vreeland, NA)",
+                      "xpolity_nas" = "X-Polity",
+                      "xpolity" = "X-Polity",
                       "part" = "Polyarchy",
                       "geddes" = "Authoritarian Regimes",
-                      "uds_xpolity" = "Unified Democracy Scores (X-Polity Version)")
-  plt <- plt[plt$outcome %in% c("civil.war", "ns_fat", "osv_fat", "latent_mean", "terror_killed",
+                      "uds_xpolity" = "Unified Democracy Scores (X-Polity)",
+                      "d_part" = "Polyarchy (FD)",
+                      "d_xpolity_nas" = "X-Polity (NA, FD)",
+                      "d_uds_xpolity" = "Unified Democracy Scores (X-Polity, FD)")
+  plt <- plt[plt$outcome %in% c("cwar", "cconflict", "ns_fat", "osv_fat", "latent_mean", "terror_killed",
                                 "terror_events", "nonviolent_protest", "violent_protest",
                                 "use.of.force"), ]
   plt$outcome <- as.character(plt$outcome)
@@ -82,8 +85,8 @@ invisible(lapply(out, function(x) {
     aggr <- aggr[, c("xpolity", "outcome", "value")]
     plt <- rbind(aggr, filter(plt, xpolity < -6))
   }
-  outcomes <- unique(plt$outcome)[c(1,7,5,6,2,3,4,8,9)]
-  plt$outcome <- factor(plt$outcome, levels = outcomes)
+  ## outcomes <- unique(plt$outcome)[c(1,7,5,6,2,3,4,8,9)]
+  ## plt$outcome <- factor(plt$outcome, levels = outcomes)
   p <- ggplot(plt, aes_string(var, "value", group = "outcome"))  
   p <- p + geom_point()
   if (var != "xpolity")
@@ -104,7 +107,7 @@ invisible(lapply(out, function(x) {
   }
 
   plt_int <- x$plt_int
-  plt_int <- plt_int[plt_int$outcome %in% c("civil.war", "ns_fat", "osv_fat", "latent_mean", "terror_killed",
+  plt_int <- plt_int[plt_int$outcome %in% c("cwar", "cconflict", "ns_fat", "osv_fat", "latent_mean", "terror_killed",
                                             "terror_events", "nonviolent_protest", "violent_protest",
                                             "use.of.force"), ]
   plt_int$outcome <- as.character(plt_int$outcome)
@@ -121,9 +124,9 @@ invisible(lapply(out, function(x) {
 
   for (y in unique(plt_int$outcome)) {
     p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "year", z = "value"))
-    p <- p + geom_tile(aes_string(fill = "value"))
+    p <- p + geom_raster(aes_string(fill = "value"), interpolate = TRUE)
     p <- p + scale_fill_gradient(low = "white", high = "red", name = y)
-    p <- p + guides(fill = guide_colorbar(barwidth = .75, barheight = 10, ticks = FALSE))
+    p <- p + guides(fill = guide_colorbar(barwidth = .75, barheight = 10, ticks = FALSE, raster = TRUE))
     p <- p + xlab(var_label) + ylab("Year")
     p <- p + theme_bw()
     ggsave(paste0(dir_prefix, "figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"),
