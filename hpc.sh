@@ -6,4 +6,4 @@
 cd work/mvpv
 module load R
 
-R CMD BATCH --no-restore --no-save R/analysis.R /dev/stdout
+Rscript R/analysis.R 20

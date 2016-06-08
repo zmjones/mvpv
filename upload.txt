@@ -1,4 +1,6 @@
-data/rep.csv
+data/1990_2008_rep.csv
+data/1970_2008_rep.csv
 R/analysis.R
 R/functions.R
+R/global.R
 hpc.sh
