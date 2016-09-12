@@ -6,4 +6,5 @@
 cd work/mvpv
 module load R
 
+mkdir -p results
 Rscript R/analysis.R 20

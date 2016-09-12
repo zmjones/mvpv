@@ -1,5 +1,15 @@
+TEXCMD := pdflatex -interaction=batchmode
+
+Draft/jones_lupu_manuscript.pdf: Draft/jones_lupu_manuscript.tex
+	$(TEXCMD) $<
+	bibtex manuscript.aux
+	$(TEXCMD) $<
+	$(TEXCMD) $<
+	find . | egrep ".*((\.(aux|log|blg|bbl|out|DS_Store)))$$" | xargs rm
+	rm -rf auto
+
 data/rep.csv: R/data.R data/uds_xpolity.csv
-	R CMD BATCH --no-save --no-restore --args 1981 2008 R/data.R
+	R CMD BATCH --no-save --no-restore R/data.R
 
 data/uds_xpolity.csv: R/uds.R
 	R CMD BATCH --no-save --no-restore R/uds.R

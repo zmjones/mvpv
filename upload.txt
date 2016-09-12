@@ -4,3 +4,4 @@ R/analysis.R
 R/functions.R
 R/global.R
 hpc.sh
+results/fits.RData

@@ -3,20 +3,20 @@ regime_density <- function(data) {
   plt$value <- as.numeric(plt$value)
   p <- ggplot(plt, aes(value)) + stat_density() + facet_wrap(~ variable, scales = "free")
   ggsave(paste0(dir_prefix, "figures/", min(data$year), "_", max(data$year), "_",
-                "regime_variables_density.png"), width = 10, height = 8)
+    "regime_variables_density.png"), width = 10, height = 8)
 }
 
 plot_univariate <- function(plt) {
   var <- colnames(plt)[1]
   var_label <- switch(var,
-                      "xpolity_nas" = "X-Polity",
-                      "xpolity" = "X-Polity",
-                      "part" = "Polyarchy",
-                      "geddes" = "Authoritarian Regimes",
-                      "uds_xpolity" = "Unified Democracy Scores (X-Polity)")
+    "xpolity_nas" = "X-Polity",
+    "xpolity" = "X-Polity",
+    "part" = "Polyarchy",
+    "geddes" = "Authoritarian Regimes",
+    "uds_xpolity" = "Unified Democracy Scores (X-Polity)")
   plt <- plt[plt$outcome %in% c("cwar", "cconflict", "ns_fat", "osv_fat", "latent_mean", "terror_killed",
-                                "terror_events", "nonviolent_protest", "violent_protest",
-                                "use.of.force"), ]
+    "terror_events", "nonviolent_protest", "violent_protest",
+    "use.of.force"), ]
   plt$outcome <- as.character(plt$outcome)
   plt <- relabel_outcomes(plt, "outcome")
   plt[[var]] <- as.numeric(as.character(plt[[var]]))
@@ -69,7 +69,7 @@ plot_bivariate <- function(plt) {
     p <- p + xlab(var_label) + ylab("Year")
     p <- p + theme_bw()
     ggsave(paste0(dir_prefix, "figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"),
-           width = 11, height = 8)
+      width = 11, height = 8)
   }
 }
 
@@ -85,9 +85,9 @@ preprocess <- function(df, regime_variables) {
 
   id <- c("ccode", "year")
   outcomes <- c("cwar_count", "cconflict_count", "cwar_onset", "cconflict_onset",
-                "max_hostlevel", "latent_mean", "terror_killed", "terror_events",
-                "nonviolent_protest", "violent_protest")
-  if (min(df$year) < 1990) outcomes <- outcomes[!grepl("protest", outcomes)]
+    "max_hostlevel", "latent_mean", "terror_killed", "terror_events",
+    "nonviolent_protest", "violent_protest", "osv_deaths", "nsv_deaths")
+  if (min(df$year) < 1990) outcomes <- outcomes[!grepl("protest|osv_deaths|nsv_deaths", outcomes)]
 
   dropped <- df[apply(df[, outcomes], 1, function(x) any(is.na(x))), ]
   write.csv(dropped, paste0(dir_prefix, "data/", "dropped_obs_", min(df$year), ".csv"), row.names = FALSE)
@@ -102,9 +102,9 @@ preprocess <- function(df, regime_variables) {
   weights[is.na(weights)] <- 0
 
   list(df = df,
-       control = control,
-       weights = weights,
-       outcomes = outcomes)
+    control = control,
+    weights = weights,
+    outcomes = outcomes)
 }
 
 ccode_fix <- function(df) {
@@ -116,33 +116,33 @@ ccode_fix <- function(df) {
 
 relabel_dataframe <- function(data, var, reverse = FALSE) {
   labs <- rbind(c("cwar", "Civil War (sum)"),
-                c("cconflict", "Civil Conflict (sum)"),
-                c("ns_fat", "Non-State Conflict Fatalities"),
-                c("osv_fat", "One Sided Violence Fatalities"),
-                c("latent_mean", "Respect for Physical Integrity\n (Fariss, posterior mean)"),
-                c("terror_events", "Terrorist Attacks"),
-                c("terror_killed", "Fatalities from Terrorist Attacks"),
-                c("polpris", "Political Imprisonment"),
-                c("disap", "Disappearances"),
-                c("tort", "Torture"),
-                c("kill", "Extrajudicial Killings"),
-                c("max_hostlevel", "Maximum Hostility Level"),
-                c("nonviolent_protest", "Non-Violent Protest"),
-                c("violent_protest", "Violent Protest"),
-                c("max_hostlevel.use.of.force", "Use of Force"),
-                c("use.of.force", "Use of Force"),
-                c("part", "Polyarchy"),
-                c("xpolity", "X-Polity"),
-                c("xpolity_nas", "X-Polity (NA)"),
-                c("uds_xpolity", "Unified Democracy Scores (X-Polity)"),
-                c("year", "Year"),
-                c("gdppc", "GDP per Capita"),
-                c("pop", "Population"),
-                c("exclpop", "Excluded Population (%)"),
-                c("oilpc", "Oil Exports (% of GDP)"),
-                c("ethfrac", "Ethnic Fractionalization"),
-                c("newstate", "Newly Independent"),
-                c("durable", "Regime Durability"))
+    c("cconflict", "Civil Conflict (sum)"),
+    c("ns_fat", "Non-State Conflict Fatalities"),
+    c("osv_fat", "One Sided Violence Fatalities"),
+    c("latent_mean", "Respect for Physical Integrity\n (Fariss, posterior mean)"),
+    c("terror_events", "Terrorist Attacks"),
+    c("terror_killed", "Fatalities from Terrorist Attacks"),
+    c("polpris", "Political Imprisonment"),
+    c("disap", "Disappearances"),
+    c("tort", "Torture"),
+    c("kill", "Extrajudicial Killings"),
+    c("max_hostlevel", "Maximum Hostility Level"),
+    c("nonviolent_protest", "Non-Violent Protest"),
+    c("violent_protest", "Violent Protest"),
+    c("max_hostlevel.use.of.force", "Use of Force"),
+    c("use.of.force", "Use of Force"),
+    c("part", "Polyarchy"),
+    c("xpolity", "X-Polity"),
+    c("xpolity_nas", "X-Polity (NA)"),
+    c("uds_xpolity", "Unified Democracy Scores (X-Polity)"),
+    c("year", "Year"),
+    c("gdppc", "GDP per Capita"),
+    c("pop", "Population"),
+    c("exclpop", "Excluded Population (%)"),
+    c("oilpc", "Oil Exports (% of GDP)"),
+    c("ethfrac", "Ethnic Fractionalization"),
+    c("newstate", "Newly Independent"),
+    c("durable", "Regime Durability"))
   if (reverse)
     labs <- labs[, c(2, 1)]
   labs <- as.data.frame(labs, stringsAsFactors = FALSE)
@@ -175,16 +175,16 @@ ciri_grouper <- function(plt) {
   ciri_plt$outcome <- str_replace_all(ciri_plt$outcome, ciri_matcher, "")
   ciri_plt$outcome <- str_replace_all(ciri_plt$outcome, "\\.| ", "")
   ciri_plt$outcome <- factor(ciri_plt$outcome, levels = c("none", "occasional", "frequent"),
-                             labels = c("None", "Occasional", "Frequent"), ordered = TRUE)
+    labels = c("None", "Occasional", "Frequent"), ordered = TRUE)
   ciri_plt$value <- as.numeric(ciri_plt$value)
   relabel_outcomes(ciri_plt, "component")
 }
 
 mid_grouper <- function(plt) {
   mid_levels <- c("no dispute", "no militarized action", "threat to use force",
-                  "display of force", "use of force", "war")
+    "display of force", "use of force", "war")
   mid_labels <- c("No Dispute", "No Militarized Action", "Threat to Use Force",
-                  "Display of Force", "Use of Force", "War")
+    "Display of Force", "Use of Force", "War")
   mid_plt <- filter(plt, grepl("max_hostlevel", outcome))
   mid_plt$outcome <- str_replace_all(mid_plt$outcome, "max_hostlevel\\.", "")
   mid_plt$outcome <- str_replace_all(mid_plt$outcome, "\\.", " ")

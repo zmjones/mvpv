@@ -7,7 +7,7 @@ set.seed(seed)
 if (is.na(cores)) cores <- parallel::detectCores()
 
 ## load and preprocess data
-pkgs <- c("party", "edarf", "reshape2", "stringr", "foreach", "doParallel")
+pkgs <- c("party", "edarf", "reshape2", "stringr", "doParallel", "parallel")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 path <- unlist(str_split(getwd(), "/"))
@@ -22,27 +22,33 @@ data <- list(
   df_1970_2008 = read.csv(paste0(dir_prefix, "data/1970_2008_rep.csv"), stringsAsFactors = TRUE)
 )
 
-data <- lapply(data, preprocess, regime_variables = regime_variables)
+data <- lapply(data, preprocess, regime_variables = regime$name)
 
 cl <- makePSOCKcluster(cores)
 registerDoParallel(cl)
 
-fits <- foreach(d = data, .packages = "party") %:% foreach(x = regime_variables) %dopar% {
-  form <- paste0(paste0(d$outcomes, collapse = "+"), "~",
-                 paste0(c(explanatory_variables, x), collapse = "+"))
-  cforest(as.formula(form), d = d$df, weights = d$weights, controls = d$control)
-}
-fits <- unlist(fits, FALSE)
-save(fits, file = "fits.RData")
-
-pd <- foreach(fit = fits[1:2], .packages = c("party", "edarf")) %do% {
-  xvars <- names(fit@data@get("input"))
-  partial_dependence(fit, var = xvars[length(xvars)], cutoff = 15, parallel = TRUE)
-}
-save(pd, file = "pd.RData")
-
-pd_int <- foreach(fit = fits[1], .packages = c("party", "edarf")) %:%
-  foreach(x = regime_variables[1], z = explanatory_variables[1]) %do% {
-    partial_dependence(fit, var = c(x, z), cutoff = 3, interaction = TRUE, parallel = TRUE)
+## fit random forest on each combination of regime type variable and data (1990 and 1970 start)
+## with some outcome variables excluded for 1970 start
+## compute the univariate partial dependence of regime type on the trained random forest
+## compute the bivariate partial dependence of each explanatory variable and each measure of regime type
+## on the the random forest. save all of this for visualization
+for (d in data) {
+  for (x in regime$name) {
+    form <- paste0(paste0(d$outcomes, collapse = " + "), " ~ ",
+      paste0(c(explanatory$name, x), collapse = " + "))
+    fit <- cforest(as.formula(form), data = d$df, weights = d$weights, controls = d$control)
+    save(fit, file = paste0(dir_prefix, "results/fit_", x, "_", min(d$df$year), ".RData"))
+    pd <- partial_dependence(fit, var = x, cutoff = 15, parallel = TRUE)
+    save(pd, file = paste0(dir_prefix, "results/pd_", x, "_", min(d$df$year), ".RData"))
+    load(paste0(dir_prefix, "results/fit_", x, "_", min(d$df$year), ".RData"))
+    pd_int <- vector("list", length(explanatory_variables))
+    names(pd_int) <- apply(expand.grid(x, explanatory_variables), 1,
+      function(x) paste0(x, collapse = ":"))
+    for (z in explanatory_variables) {
+      pd_int[[paste(x, z, sep = ":")]] <- partial_dependence(fit, var = c(x, z),
+        cutoff = 30, interaction = TRUE, parallel = TRUE)
+    }
+    save(pd_int, file = paste0(dir_prefix, "results/pd_int_", x, "_",
+      min(d$df$year), ".RData"))
   }
-save(pd_int, file = "pd_int.RData")
+}
