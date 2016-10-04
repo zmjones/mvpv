@@ -6,6 +6,22 @@ regime_density <- function(data) {
     "regime_variables_density.png"), width = 10, height = 8)
 }
 
+outcome_cor <- function(data) {
+  library("polycor")
+  data <- data.table(data)
+  min_year <- min(data$year)
+  data <- data[, colnames(data) %in% outcomes$name, with = FALSE]
+  setnames(data, colnames(data), outcomes$label[match(colnames(data), outcomes$name)])
+  plt <- melt(hetcor(as.data.frame(data))$correlations)
+  p <- ggplot(plt, aes(Var1, Var2, fill = value)) +
+    geom_tile() +
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+      name = "Heterogeneous\nCorrelation") +
+    labs(x = NULL, y = NULL) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  ggsave(paste0(dir_prefix, "figures/cor_", min_year, ".png"), width = 10, height = 8)
+}
+
 plot_univariate <- function(plt) {
   var <- colnames(plt)[1]
   var_label <- switch(var,
@@ -27,24 +43,20 @@ plot_univariate <- function(plt) {
     plt <- rbind(aggr, filter(plt, xpolity < -6))
   }
 
-  p <- ggplot(plt, aes_string(var, "value", group = "outcome"))  
-  p <- p + geom_point()
+  p <- ggplot(plt, aes_string(var, "value", group = "outcome")) + geom_point() +
+    facet_wrap(~ outcome, scales = "free_y") +
+    xlab(var_label) + ylab("Partial Prediction") + theme_bw()
   if (var != "xpolity")
     p <- p + geom_line()
-  p <- p + facet_wrap(~ outcome, scales = "free_y")
-  p <- p + xlab(var_label) + ylab("Partial Prediction")
-  p <- p + theme_bw()
-
   ggsave(paste0(dir_prefix, "figures/", var, ".png"), width = 11, height = 8)
 
   for (y in unique(plt$outcome)) {
-    p <- ggplot(plt[plt$outcome == y, ], aes_string(var, "value"))
-    p <- p + geom_point()
+    p <- ggplot(plt[plt$outcome == y, ], aes_string(var, "value")) + geom_point() +
+      xlab(var_label) + ylab(y) + theme_bw()
     if (var != "xpolity")
       p <- p + geom_line()
-    p <- p + xlab(var_label) + ylab(y)
-    p <- p + theme_bw()
-    ggsave(paste0(dir_prefix, "figures/", relabel_outcomes(y, "", TRUE), "_", var, ".png"), width = 11, height = 8)
+    ggsave(paste0(dir_prefix, "figures/",
+      relabel_outcomes(y, "", TRUE), "_", var, ".png"), width = 11, height = 8)
   }
 }
 
@@ -62,17 +74,17 @@ plot_bivariate <- function(plt) {
   }
 
   for (y in unique(plt_int$outcome)) {
-    p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "year", z = "value"))
-    p <- p + geom_raster(aes_string(fill = "value"), interpolate = TRUE)
-    p <- p + scale_fill_gradient(low = "white", high = "red", name = y)
-    p <- p + guides(fill = guide_colorbar(barwidth = .75, barheight = 10, ticks = FALSE, raster = TRUE))
-    p <- p + xlab(var_label) + ylab("Year")
-    p <- p + theme_bw()
-    ggsave(paste0(dir_prefix, "figures/", relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"),
+    p <- ggplot(plt_int[plt_int$outcome == y, ], aes_string(var, "year", z = "value")) +
+      geom_raster(aes_string(fill = "value"), interpolate = TRUE) +
+      scale_fill_gradient(low = "white", high = "red", name = y) +
+      guides(fill = guide_colorbar(barwidth = .75, barheight = 10,
+        ticks = FALSE, raster = TRUE)) +
+      xlab(var_label) + ylab("Year") + theme_bw()
+    ggsave(paste0(dir_prefix, "figures/",
+      relabel_outcomes(y, "", TRUE), "_", var, "_int_year.png"),
       width = 11, height = 8)
   }
 }
-
 
 preprocess <- function(df, regime_variables) {
   df$latent_mean <- df$latent_mean * -1 ## rescale so that higher = more abuse
@@ -80,17 +92,20 @@ preprocess <- function(df, regime_variables) {
   ciri_vars <- c("disap", "tort", "kill", "polpris")
   for (x in ciri_vars)
     df[, x] <- factor(df[, x], levels = ciri_levels, ordered = TRUE)
-  df$xpolity <- factor(df$xpolity, ordered = TRUE)
+  df$xpolity <- factor(df$xpolity, ordered = FALSE)
   df$xpolity_nas <- factor(df$xpolity_nas, ordered = TRUE)
 
   id <- c("ccode", "year")
   outcomes <- c("cwar_count", "cconflict_count", "cwar_onset", "cconflict_onset",
     "max_hostlevel", "latent_mean", "terror_killed", "terror_events",
     "nonviolent_protest", "violent_protest", "osv_deaths", "nsv_deaths")
-  if (min(df$year) < 1990) outcomes <- outcomes[!grepl("protest|osv_deaths|nsv_deaths", outcomes)]
+  if (min(df$year) < 1990)
+    outcomes <- outcomes[!grepl("protest|osv_deaths|nsv_deaths", outcomes)]
 
   dropped <- df[apply(df[, outcomes], 1, function(x) any(is.na(x))), ]
-  write.csv(dropped, paste0(dir_prefix, "data/", "dropped_obs_", min(df$year), ".csv"), row.names = FALSE)
+  write.csv(dropped,
+    paste0(dir_prefix, "data/", "dropped_obs_", min(df$year), ".csv"),
+    row.names = FALSE)
   df <- df[apply(df[, outcomes], 1, function(x) !any(is.na(x))), ]
   
   control <- cforest_unbiased(mtry = 3, ntree = 1000, trace = FALSE)
@@ -174,7 +189,8 @@ ciri_grouper <- function(plt) {
   ciri_plt$component <- str_extract(ciri_plt$outcome, ciri_matcher)
   ciri_plt$outcome <- str_replace_all(ciri_plt$outcome, ciri_matcher, "")
   ciri_plt$outcome <- str_replace_all(ciri_plt$outcome, "\\.| ", "")
-  ciri_plt$outcome <- factor(ciri_plt$outcome, levels = c("none", "occasional", "frequent"),
+  ciri_plt$outcome <- factor(ciri_plt$outcome,
+    levels = c("none", "occasional", "frequent"),
     labels = c("None", "Occasional", "Frequent"), ordered = TRUE)
   ciri_plt$value <- as.numeric(ciri_plt$value)
   relabel_outcomes(ciri_plt, "component")
@@ -202,7 +218,9 @@ brier <- function(a, b) {
     mse(a, b)
 }
 
-read_csv <- function(dir_prefix, file) read.csv(paste0(dir_prefix, "data/", file), stringsAsFactors = TRUE)
+read_csv <- function(dir_prefix, file) {
+  read.csv(paste0(dir_prefix, "data/", file), stringsAsFactors = TRUE)
+}
 
 expand_years <- function(df, idx = c(2, 3)) {
   year <- apply(df, 1, function(x) seq(x[idx[1]], x[idx[2]]))
@@ -215,8 +233,10 @@ expand_years <- function(df, idx = c(2, 3)) {
   df[, -idx]
 }
 
-dupes <- function(df) df[which(duplicated(df[, c("ccode", "year")]) |
-                                 duplicated(df[, c("ccode", "year")], fromLast = TRUE)), ]
+dupes <- function(df) {
+  df[which(duplicated(df[, c("ccode", "year")]) |
+             duplicated(df[, c("ccode", "year")], fromLast = TRUE)), ]
+}
 
 expand_ccodes <- function(df) {
   ccodes <- str_split(df$ccode, ", ")
@@ -240,9 +260,56 @@ expand_ccodes <- function(df) {
 miss_mapper <- function(df, var, label, outfile) {
   miss_map <- cbind(df[, c("cname", "year")], "var" = is.na(df[, var]))
   miss_map <- miss_map[miss_map$year >= 1945, ]
-  p <- ggplot(miss_map, aes(year, cname))
-  p <- p + geom_tile(aes(fill = var))
-  p <- p + labs(x = "year", y = "state")
-  p <- p + scale_fill_brewer(name = label, type = "qual")
+  p <- ggplot(miss_map, aes(year, cname)) + geom_tile(aes(fill = var)) +
+    labs(x = "year", y = "state") + scale_fill_brewer(name = label, type = "qual")
   ggsave(paste0(dir_prefix, "figures/", outfile, ".png"), p, width = 10, height = 20)
+}
+
+weight_fun <- function(x, newdata, data) {
+  w <- ddalpha::depth.halfspace(newdata, data, exact = FALSE)
+  sum(w * x) / sum(w)
+}
+
+estimate <- function(year, x, regime, explanatory) {
+  data <- read.csv(paste0("../data/", year, "_2008_rep.csv"),
+    stringsAsFactors = TRUE)
+  data <- preprocess(data, regime$name)
+  form <- paste0(paste0(data$outcomes, collapse = " + "), " ~ ",
+    paste0(c(explanatory$name, x), collapse = " + "))
+  cforest(as.formula(form), data = data$df, weights = data$weights,
+    controls = data$control)
+}
+
+univariate_pd <- function(x, year, cutoff, inner, fun) {
+  cl <- makeForkCluster(inner)
+  registerDoParallel(cl)
+  load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
+  pd <- partial_dependence(tmp, var = x, cutoff = cutoff, parallel = TRUE, fun = fun)
+  stopCluster(cl)
+  pd
+}
+
+bivariate_pd <- function(x, year, cutoff, inner, fun) {
+  path <- unlist(str_split(getwd(), "/"))
+  dir_prefix <- ifelse(path[length(path)] == "R", "../", "./")
+  cl <- makeForkCluster(inner)
+  registerDoParallel(cl)
+  load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
+  pd <- vector("list", length(explanatory))
+  names(pd) <- explanatory
+  for (z in explanatory) {
+    pd[[z]] <- partial_dependence(tmp, var = c(x, z), cutoff = cutoff,
+      interaction = TRUE, parallel = TRUE, fun = fun)
+  }
+  stopCluster(cl)
+  pd
+}
+
+write_results <- function(res, pars, prefix) {
+  for (i in 1:length(results)) {
+    tmp <- res[[i]]
+    save(tmp, file = paste0(dir_prefix,
+      "results/", prefix, "_", paste0(pars[i, ], collapse = "_"), ".RData"))
+  }
+  NULL
 }

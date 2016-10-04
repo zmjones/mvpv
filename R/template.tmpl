@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#PBS -N <%= paste0("zmjones", job.hash) %>
+#PBS -o <%= log.file %>
+#PBS -l walltime=<%= resources$walltime %>
+#PBS -l nodes=<%= resources$nodes %>:ppn=<%= resources$ppn %>
+#PBS -l mem=<%= resources$memory %>
+#PBS -A open
+#PBS -j oe
+
+module load R
+Rscript -e 'batchtools::doJobCollection("<%= uri %>")'

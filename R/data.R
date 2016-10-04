@@ -179,7 +179,6 @@ df$tort <- factor(df$tort, labels = ciri_labels, ordered = TRUE)
 df$kill <- factor(df$kill, labels = ciri_labels, ordered = TRUE)
 df$polpris <- factor(df$polpris, labels = ciri_labels, ordered = TRUE)
 df$newstate <- factor(df$newstate, labels = c("not a recent entrant", "entry into system in last two years"))
-df$xpolity <- factor(df$xpolity, ordered = FALSE)
 
 export(df[df$year <= 2008 & df$year >= 1990, ], paste0(data_prefix, "1990_2008_rep.csv"))
 export(df[df$year <= 2008 & df$year >= 1970, ], paste0(data_prefix, "1970_2008_rep.csv"))

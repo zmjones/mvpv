@@ -3,5 +3,4 @@ data/1970_2008_rep.csv
 R/analysis.R
 R/functions.R
 R/global.R
-hpc.sh
-results/fits.RData
+R/template.tmpl

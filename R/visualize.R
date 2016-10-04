@@ -14,6 +14,8 @@ data <- list(
 )
 
 invisible(lapply(data, function(x) regime_density(x[, c(regime$name, "year")])))
+invisible(lapply(data, function(x)
+  outcome_cor(x[, which(colnames(x) %in% outcomes$name)])))
 
 files <- dir(paste0(dir_prefix, "results/"))
 files <- files[str_detect(files, "^pd*")]
