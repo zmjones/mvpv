@@ -41,9 +41,9 @@ submitJobs(resources = resources, reg = pd_reg)
 
 pd_int_reg <- makeRegistry("pd_int_registry", packages = pkgs, seed = seed)
 pd_int_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
-batchExport(list(dir_prefix = dir_prefix, explanatory = explanatory$name),
-  reg = pd_int_reg)
-batchMap(bivariate_pd, x = regime$name, year = c(1970, 1990),
+batchExport(list(dir_prefix = dir_prefix), reg = pd_int_reg)
+pars <- CJ(x = regime$name, year = c(1970, 1990), z = explanatory$name)
+batchMap(bivariate_pd, x = pars$x, year = pars$year, z = pars$z,
   more.args = list(cutoff = 30, inner = inner, fun = mean),
   reg = pd_int_reg)
 submitJobs(resources = resources, reg = pd_int_reg)

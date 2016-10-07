@@ -289,18 +289,12 @@ univariate_pd <- function(x, year, cutoff, inner, fun) {
   pd
 }
 
-bivariate_pd <- function(x, year, cutoff, inner, fun) {
-  path <- unlist(str_split(getwd(), "/"))
-  dir_prefix <- ifelse(path[length(path)] == "R", "../", "./")
+bivariate_pd <- function(x, z, year, cutoff, inner, fun) {
   cl <- makeForkCluster(inner)
   registerDoParallel(cl)
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
-  pd <- vector("list", length(explanatory))
-  names(pd) <- explanatory
-  for (z in explanatory) {
-    pd[[z]] <- partial_dependence(tmp, var = c(x, z), cutoff = cutoff,
-      interaction = TRUE, parallel = TRUE, fun = fun)
-  }
+  pd <- partial_dependence(tmp, var = c(x, z), cutoff = cutoff,
+    interaction = TRUE, parallel = TRUE, fun = fun)
   stopCluster(cl)
   pd
 }
