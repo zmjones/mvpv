@@ -280,27 +280,30 @@ estimate <- function(year, x, regime, explanatory) {
     controls = data$control)
 }
 
-univariate_pd <- function(x, year, cutoff, inner, fun) {
-  cl <- makeForkCluster(inner)
-  registerDoParallel(cl)
+univariate_pd <- function(x, year, fun) {
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
-  pd <- partial_dependence(tmp, var = x, cutoff = cutoff, parallel = TRUE, fun = fun)
-  stopCluster(cl)
-  pd
+  data <- tmp@data@env$input
+  points <- list(unique(data[[x]]))
+  names(points) <- x
+
+  partial_dependence(tmp, x,
+    c(NA, floor(nrow(tmp@data@env$input) * .25)),
+    aggregate.fun = fun, points = points)
 }
 
-bivariate_pd <- function(x, z, year, cutoff, inner, fun) {
-  cl <- makeForkCluster(inner)
-  registerDoParallel(cl)
+bivariate_pd <- function(x, z, year, fun) {
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
-  pd <- partial_dependence(tmp, var = c(x, z), cutoff = cutoff,
-    interaction = TRUE, parallel = TRUE, fun = fun)
-  stopCluster(cl)
-  pd
+  data <- tmp@data@env$input
+  points <- list(unique(data[[x]]), unique(data[[z]]))
+  names(points) <- c(x, z)
+  
+  partial_dependence(tmp, c(x, z),
+    c(NA, floor(nrow(tmp@data@env$input) * .25)),
+    interaction = TRUE, aggregate.fun = fun, points = points)
 }
 
 write_results <- function(res, pars, prefix) {
-  for (i in 1:length(results)) {
+  for (i in 1:length(res)) {
     tmp <- res[[i]]
     save(tmp, file = paste0(dir_prefix,
       "results/", prefix, "_", paste0(pars[i, ], collapse = "_"), ".RData"))

@@ -29,15 +29,15 @@ waitForJobs(reg = fit_reg)
 fits <- reduceResultsList(reg = fit_reg)
 write_results(fits, pars, "fit")
 
-inner <- 20L
-resources$ppn <- inner
 pd_reg <- makeRegistry("pd_registry", packages = pkgs, seed = seed)
 pd_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_reg)
 batchMap(univariate_pd, x = pars$x, year = pars$year,
-  more.args = list(cutoff = 15, inner = inner, fun = mean),
-  reg = pd_reg)
+  more.args = list(fun = mean), reg = pd_reg)
 submitJobs(resources = resources, reg = pd_reg)
+waitForJobs(reg = pd_reg)
+pd <- reduceResultsList(reg = pd_reg)
+write_results(pd, pars[unlist(findDone(reg = pd_reg), )], "pd")
 
 pd_int_reg <- makeRegistry("pd_int_registry", packages = pkgs, seed = seed)
 pd_int_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
@@ -47,11 +47,6 @@ batchMap(bivariate_pd, x = pars$x, year = pars$year, z = pars$z,
   more.args = list(cutoff = 30, inner = inner, fun = mean),
   reg = pd_int_reg)
 submitJobs(resources = resources, reg = pd_int_reg)
-
-waitForJobs(reg = pd_reg)
-pd <- reduceResultsList(reg = pd_reg)
-write_results(pd, pars, "pd")
-
 waitForJobs(reg = pd_int_reg)
 pd_int <- reduceResultsList(reg = pd_int_reg)
-write_results(pd_int, pars, "pd_int")
+write_results(pd_int, pars[unlist(findDone(reg = pd_int_reg), )], "pd_int")
