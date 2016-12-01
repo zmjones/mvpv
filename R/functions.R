@@ -6,13 +6,13 @@ regime_density <- function(data) {
     "regime_variables_density.png"), width = 10, height = 8)
 }
 
-outcome_cor <- function(data) {
+outcome_cor <- function(x) {
   library("polycor")
-  data <- data.table(data)
-  min_year <- min(data$year)
-  data <- data[, colnames(data) %in% outcomes$name, with = FALSE]
-  setnames(data, colnames(data), outcomes$label[match(colnames(data), outcomes$name)])
-  plt <- melt(hetcor(as.data.frame(data))$correlations)
+  x <- data.table(x)
+  min_year <- min(x$year)
+  x <- x[, colnames(x) %in% outcomes$name, with = FALSE]
+  setnames(x, colnames(x), outcomes$label[match(colnames(x), outcomes$name)])
+  plt <- melt(hetcor(as.data.frame(x))$correlations)
   p <- ggplot(plt, aes(Var1, Var2, fill = value)) +
     geom_tile() +
     scale_fill_gradient2(low = "blue", high = "red", mid = "white",
@@ -280,26 +280,43 @@ estimate <- function(year, x, regime, explanatory) {
     controls = data$control)
 }
 
-univariate_pd <- function(x, year, fun) {
+univariate_pd <- function(x, year, n) {
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
   data <- tmp@data@env$input
-  points <- list(unique(data[[x]]))
-  names(points) <- x
+  n[2] <- nrow(data)
 
-  partial_dependence(tmp, x,
-    c(NA, floor(nrow(tmp@data@env$input) * .25)),
-    aggregate.fun = fun, points = points)
+  if (is.factor(data[[x]]) || all(round(data[[x]], 0) == data[[x]]))  {
+    points <- list(na.omit(unique(data[[x]])))
+    n[1] <- NA
+  } else {
+    points <- list(seq(min(data[[x]], na.rm = TRUE), max(data[[x]], na.rm = TRUE),
+      length.out = n[1]))
+  }
+  names(points) <- x
+  marginalPrediction(data, x, n, tmp, points = points, aggregate.fun = weighted.mean,
+    predict.fun = function(object, newdata) object@predict_response(newdata),
+    weight.fun = function(design, data) depth.projection(design, data))
 }
 
-bivariate_pd <- function(x, z, year, fun) {
+bivariate_pd <- function(x, z, year, n) {
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
   data <- tmp@data@env$input
-  points <- list(unique(data[[x]]), unique(data[[z]]))
-  names(points) <- c(x, z)
-  
-  partial_dependence(tmp, c(x, z),
-    c(NA, floor(nrow(tmp@data@env$input) * .25)),
-    interaction = TRUE, aggregate.fun = fun, points = points)
+  n[2] <- nrow(data)
+
+  if (is.factor(data[[x]]) || all(round(data[[x]], 0) == data[[x]]))  {
+    points <- list(na.omit(unique(data[[x]])))
+    n[1] <- NA
+  } else {
+    points <- list(seq(min(data[[x]], na.rm = TRUE), max(data[[x]], na.rm = TRUE),
+      length.out = n[1]))
+  }
+  names(points) <- x
+  points <- c(points, list("year" = year:2008))
+  n[1] <- NA
+
+  marginalPrediction(tmp, c(x, z), n, tmp, points = points, aggregate.fun = weighted.mean,
+    predict.fun = function(object, newdata) object@predict_response(newdata),
+    weight.fun = function(design, data) depth.projection(design, data))
 }
 
 write_results <- function(res, pars, prefix) {

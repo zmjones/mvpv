@@ -2,8 +2,7 @@ seed <- 1987
 set.seed(seed)
 
 ## load and preprocess data
-pkgs <- c("party", "edarf", "reshape2", "stringr", "ddalpha", "batchtools",
-  "doParallel")
+pkgs <- c("party", "mmpf", "reshape2", "stringr", "ddalpha", "batchtools")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 path <- unlist(str_split(getwd(), "/"))
@@ -33,10 +32,10 @@ pd_reg <- makeRegistry("pd_registry", packages = pkgs, seed = seed)
 pd_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_reg)
 batchMap(univariate_pd, x = pars$x, year = pars$year,
-  more.args = list(fun = mean), reg = pd_reg)
+  more.args = list(n = c(10, NA)), reg = pd_reg)
 submitJobs(resources = resources, reg = pd_reg)
 waitForJobs(reg = pd_reg)
-pd <- reduceResultsList(reg = pd_reg)
+pd <- reduceResultsList(findDone(reg = pd_reg), reg = pd_reg)
 write_results(pd, pars[unlist(findDone(reg = pd_reg), )], "pd")
 
 pd_int_reg <- makeRegistry("pd_int_registry", packages = pkgs, seed = seed)
@@ -44,8 +43,7 @@ pd_int_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_int_reg)
 pars <- CJ(x = regime$name, year = c(1970, 1990), z = explanatory$name)
 batchMap(bivariate_pd, x = pars$x, year = pars$year, z = pars$z,
-  more.args = list(cutoff = 30, inner = inner, fun = mean),
-  reg = pd_int_reg)
+  more.args = list(n = c(10, NA)), reg = pd_int_reg)
 submitJobs(resources = resources, reg = pd_int_reg)
 waitForJobs(reg = pd_int_reg)
 pd_int <- reduceResultsList(reg = pd_int_reg)
