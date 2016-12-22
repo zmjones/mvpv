@@ -293,30 +293,37 @@ univariate_pd <- function(x, year, n) {
       length.out = n[1]))
   }
   names(points) <- x
-  marginalPrediction(data, x, n, tmp, points = points, aggregate.fun = weighted.mean,
-    predict.fun = function(object, newdata) object@predict_response(newdata),
-    weight.fun = function(design, data) depth.projection(design, data))
+  marginalPrediction(data, x, n, tmp, points = points, aggregate.fun = mean,
+    predict.fun = function(object, newdata)
+      do.call("rbind", object@predict_response(newdata)))
 }
 
 bivariate_pd <- function(x, z, year, n) {
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
   data <- tmp@data@env$input
   n[2] <- nrow(data)
+  points <- vector("list", 2L)
+  names(points) <- c(x, z)
 
-  if (is.factor(data[[x]]) || all(round(data[[x]], 0) == data[[x]]))  {
-    points <- list(na.omit(unique(data[[x]])))
-    n[1] <- NA
-  } else {
-    points <- list(seq(min(data[[x]], na.rm = TRUE), max(data[[x]], na.rm = TRUE),
-      length.out = n[1]))
+  for (i in 1:length(points)) {
+    if (is.factor(data[[names(points)[i]]])) {
+      points[[i]] <- na.omit(unique(data[[variable]]))
+    } else {
+      idx = !is.na(data[[names(points)[i]]])
+      if (all(round(data[idx, names(points)[i]]) == data[idx, names(points)[i]])) {
+        points[[i]] <- unique(data[idx, names(points)[i]])
+      } else {
+      points[[i]] <- seq(min(data[idx, names(points)[i]]),
+        max(data[idx, names(points)[i]]),
+        length.out = n[1])
+      }
+    }
   }
-  names(points) <- x
-  points <- c(points, list("year" = year:2008))
   n[1] <- NA
 
-  marginalPrediction(tmp, c(x, z), n, tmp, points = points, aggregate.fun = weighted.mean,
-    predict.fun = function(object, newdata) object@predict_response(newdata),
-    weight.fun = function(design, data) depth.projection(design, data))
+  marginalPrediction(data, c(x, z), n, tmp, points = points, aggregate.fun = mean,
+    predict.fun = function(object, newdata)
+      do.call("rbind", object@predict_response(newdata)))
 }
 
 write_results <- function(res, pars, prefix) {

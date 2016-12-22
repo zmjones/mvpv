@@ -1,8 +1,8 @@
 regime <- list(
   c("part", "Polyarchy"),
-  c("xpolity", "X-Polity"),
-  c("xpolity_nas", "X-Polity (NA)"),
-  c("uds_xpolity", "UDS X-Polity"))
+  c("xpolity", "X-Polity (w/ missing categories)"),
+  c("xpolity_nas", "X-Polity"),
+  c("uds_xpolity", "X-UDS"))
 regime <- as.data.frame(do.call(rbind, regime), stringsAsFactors = FALSE)
 colnames(regime) <- c("name", "label")
 
