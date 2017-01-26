@@ -1,4 +1,5 @@
 regime_density <- function(data) {
+  ## estimates univariate densities for regime variables and plots by data (1990 or 1970)
   plt <- melt(data[, -which(colnames(data) == "year")], id.vars = NULL, na.rm = TRUE)
   plt$value <- as.numeric(plt$value)
   p <- ggplot(plt, aes(value)) + stat_density() + facet_wrap(~ variable, scales = "free")
@@ -7,12 +8,15 @@ regime_density <- function(data) {
 }
 
 outcome_cor <- function(x) {
+  ## estimates hetcor matrix for predictors
   library("polycor")
   x <- data.table(x)
   min_year <- min(x$year)
+  if (min_year < 1990)
+    outcomes <- outcomes[!grepl("protest|osv_deaths|nsv_deaths", outcomes$name), ]
   x <- x[, colnames(x) %in% outcomes$name, with = FALSE]
   setnames(x, colnames(x), outcomes$label[match(colnames(x), outcomes$name)])
-  plt <- melt(hetcor(as.data.frame(x))$correlations)
+  plt <- melt(hetcor(as.data.frame(x), use = "pairwise.complete.obs")$correlations)
   p <- ggplot(plt, aes(Var1, Var2, fill = value)) +
     geom_tile() +
     scale_fill_gradient2(low = "blue", high = "red", mid = "white",
@@ -23,6 +27,7 @@ outcome_cor <- function(x) {
 }
 
 plot_univariate <- function(plt) {
+  ## plots univariate partial dependence
   var <- colnames(plt)[1]
   var_label <- switch(var,
     "xpolity_nas" = "X-Polity",
@@ -61,6 +66,7 @@ plot_univariate <- function(plt) {
 }
 
 plot_bivariate <- function(plt) {
+  ## plots bivariate partial dependence
   plt_int$outcome <- as.character(plt_int$outcome)
   plt_int <- relabel_outcomes(plt_int, "outcome")
   plt_int[[var]] <- as.numeric(as.character(plt_int[[var]]))
@@ -87,28 +93,36 @@ plot_bivariate <- function(plt) {
 }
 
 preprocess <- function(df, regime_variables) {
+  ## preprocesses data before models are fit
   df$latent_mean <- df$latent_mean * -1 ## rescale so that higher = more abuse
-  ciri_levels <- c("none", "occasional", "frequent")
-  ciri_vars <- c("disap", "tort", "kill", "polpris")
-  for (x in ciri_vars)
-    df[, x] <- factor(df[, x], levels = ciri_levels, ordered = TRUE)
+  ## ciri_levels <- c("none", "occasional", "frequent")
+  ## ciri_vars <- c("disap", "tort", "kill", "polpris")
+  ## for (x in ciri_vars)
+  ##   df[, x] <- factor(df[, x], levels = ciri_levels, ordered = TRUE)
   df$xpolity <- factor(df$xpolity, ordered = FALSE)
   df$xpolity_nas <- factor(df$xpolity_nas, ordered = TRUE)
 
   id <- c("ccode", "year")
+  ## this is separate from the labels in global.R because we only display
+  ## one level of the mid max_hostlevel variable, otherwise should be the same
   outcomes <- c("cwar_count", "cconflict_count", "cwar_onset", "cconflict_onset",
     "max_hostlevel", "latent_mean", "terror_killed", "terror_events",
     "nonviolent_protest", "violent_protest", "osv_deaths", "nsv_deaths")
+  ## exclude some outcome variables if the data start in 1970
   if (min(df$year) < 1990)
     outcomes <- outcomes[!grepl("protest|osv_deaths|nsv_deaths", outcomes)]
 
+  ## write any obs. that have missings on the outcomes to file
+  ## missingness in predictors is *not* dropped
   dropped <- df[apply(df[, outcomes], 1, function(x) any(is.na(x))), ]
   write.csv(dropped,
     paste0(dir_prefix, "data/", "dropped_obs_", min(df$year), ".csv"),
     row.names = FALSE)
   df <- df[apply(df[, outcomes], 1, function(x) !any(is.na(x))), ]
-  
+
+  ## set up hyperparameters and tree-subsampling weights
   control <- cforest_unbiased(mtry = 3, ntree = 1000, trace = FALSE)
+  ## randomly draw a subsample of the countries, include their time-series
   ccodes <- unique(df$ccode)
   weights <- sapply(1:control@ntree, function(x) {
     tab <- table(sample(ccodes, length(ccodes), TRUE))
@@ -123,6 +137,7 @@ preprocess <- function(df, regime_variables) {
 }
 
 ccode_fix <- function(df) {
+  ## makes ccodes consistent across input data
   df$ccode[df$year >= 1991 & df$year <= 2008 & df$ccode == 255] <- 260
   df$ccode[df$year >= 2006 & df$year <= 2008 & df$ccode == 340] <- 345
   df$ccode[df$year >= 1991 & df$year <= 2008 & df$ccode == 678] <- 670
@@ -130,6 +145,7 @@ ccode_fix <- function(df) {
 }
 
 relabel_dataframe <- function(data, var, reverse = FALSE) {
+  ## labels for plots
   labs <- rbind(c("cwar", "Civil War (sum)"),
     c("cconflict", "Civil Conflict (sum)"),
     c("ns_fat", "Non-State Conflict Fatalities"),
@@ -177,11 +193,13 @@ relabel_dataframe <- function(data, var, reverse = FALSE) {
 }
 
 relabel <- function(df, var, old, new) {
+  ## convenience factor relabelling
   df[df[[var]] == old, var] <- new
   df
 }
 
 ciri_grouper <- function(plt) {
+  ## extracts and combines ciri levels in output (not used currently)
   ciri_components <- c("polpris", "disap", "tort", "kill")
   ciri_matcher <- paste(paste0("^", ciri_components), collapse = "|")
   ciri_plt <- filter(plt, grepl(ciri_matcher, outcome))
@@ -197,6 +215,7 @@ ciri_grouper <- function(plt) {
 }
 
 mid_grouper <- function(plt) {
+  ## extracts and combines mid levels in output (not used currently)
   mid_levels <- c("no dispute", "no militarized action", "threat to use force",
     "display of force", "use of force", "war")
   mid_labels <- c("No Dispute", "No Militarized Action", "Threat to Use Force",
@@ -209,6 +228,7 @@ mid_grouper <- function(plt) {
   mid_plt
 }
 
+## loss functions (not used currently)
 mse <- function(a, b) mean((a - b)^2)
 mae <- function(a, b) mean(abs(a - b))
 brier <- function(a, b) {
@@ -219,10 +239,13 @@ brier <- function(a, b) {
 }
 
 read_csv <- function(dir_prefix, file) {
+  ## csv reading for convenience
   read.csv(paste0(dir_prefix, "data/", file), stringsAsFactors = TRUE)
 }
 
+
 expand_years <- function(df, idx = c(2, 3)) {
+  ## expand system membership data to country-year panel
   year <- apply(df, 1, function(x) seq(x[idx[1]], x[idx[2]]))
   unit <- vector("list", nrow(df))
   for (i in 1:nrow(df))
@@ -234,11 +257,13 @@ expand_years <- function(df, idx = c(2, 3)) {
 }
 
 dupes <- function(df) {
+  ## check for duplicates in ccode/year
   df[which(duplicated(df[, c("ccode", "year")]) |
              duplicated(df[, c("ccode", "year")], fromLast = TRUE)), ]
 }
 
 expand_ccodes <- function(df) {
+  ## expand fields which contain comma separated country years (multiple countries)
   ccodes <- str_split(df$ccode, ", ")
   for (i in 1:length(ccodes)) {
     if (length(ccodes[[i]]) > 1) {
@@ -258,6 +283,7 @@ expand_ccodes <- function(df) {
 }
 
 miss_mapper <- function(df, var, label, outfile) {
+  ## make a plot of missing values (not currently used)
   miss_map <- cbind(df[, c("cname", "year")], "var" = is.na(df[, var]))
   miss_map <- miss_map[miss_map$year >= 1945, ]
   p <- ggplot(miss_map, aes(year, cname)) + geom_tile(aes(fill = var)) +
@@ -266,21 +292,69 @@ miss_mapper <- function(df, var, label, outfile) {
 }
 
 weight_fun <- function(x, newdata, data) {
+  ## compute approximate tukey's halfspace depth (not currently used)
+  ## intended for use with partial dependence to reduce bias from
+  ## product distribution assumption
   w <- ddalpha::depth.halfspace(newdata, data, exact = FALSE)
   sum(w * x) / sum(w)
 }
 
-estimate <- function(year, x, regime, explanatory) {
+estimate_bv <- function(year, x, regime) {
+  ## fit bivariate model
   data <- read.csv(paste0("../data/", year, "_2008_rep.csv"),
     stringsAsFactors = TRUE)
   data <- preprocess(data, regime$name)
-  form <- paste0(paste0(data$outcomes, collapse = " + "), " ~ ",
-    paste0(c(explanatory$name, x), collapse = " + "))
+  form <- paste0(paste0(data$outcomes, collapse = " + "), " ~ ", x)
   cforest(as.formula(form), data = data$df, weights = data$weights,
     controls = data$control)
 }
 
+estimate <- function(year, x, regime, explanatory) {
+  ## fit model
+  data <- read.csv(paste0("../data/", year, "_2008_rep.csv"),
+    stringsAsFactors = TRUE)
+  data <- preprocess(data, regime$name)
+  form <- paste0(paste0(data$outcomes, collapse = "+"), "~",
+    paste0(c(explanatory$name, x), collapse = "+"))
+  cforest(as.formula(form), data = data$df, weights = data$weights,
+    controls = data$control)
+}
+
+estimate_multi_target <- function(year, x, regime, explanatory) {
+  ## fit multivariate model to data w/ 2008 held out, and compute
+  ## predictions for 2008
+  data <- read.csv(paste0("../data/", year, "_2008_rep.csv"),
+    stringsAsFactors = TRUE)
+  data <- preprocess(data, regime$name)
+  form <- paste0(paste0(data$outcomes, collapse = "+"), "~",
+    paste0(c(explanatory$name, x), collapse = "+"))
+  idx <- data$df$year < 2008
+  fit <- cforest(as.formula(form), data = data$df[idx, ],
+    weights = data$weights[idx, ], controls = data$control)
+  do.call("rbind", predict(fit, newdata = data$df[!idx, ]))
+}
+
+estimate_single_target <- function(year, x, regime, explanatory) {
+  ## fit separate models to each outcome variable with 2008 held out
+  ## and then compute predictions for 2008
+  data <- read.csv(paste0("../data/", year, "_2008_rep.csv"),
+    stringsAsFactors = TRUE)
+  data <- preprocess(data, regime$name)
+  idx <- data$df$year < 2008
+  do.call("cbind", sapply(data$outcomes[1:2], function(y) {
+    form <- paste0(y, "~", paste0(c(explanatory$name, x), collapse = "+"))
+    fit <- cforest(as.formula(form), data = data$df[idx, ],
+      weights = data$weights[idx, ], controls = data$control)
+    predict(fit, newdata = data$df[!idx, ])
+  }, simplify = FALSE, USE.NAMES = TRUE))
+}
+
+## some loss functions
+mse <- function(y, yhat) mean((y - yhat)^2)
+mce <- function(y, yhat) mean(y != yhat)
+
 univariate_pd <- function(x, year, n) {
+  ## estimate univariate partial dependence
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
   data <- tmp@data@env$input
   n[2] <- nrow(data)
@@ -299,6 +373,7 @@ univariate_pd <- function(x, year, n) {
 }
 
 bivariate_pd <- function(x, z, year, n) {
+  ## estimate bivariate partial dependence
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
   data <- tmp@data@env$input
   n[2] <- nrow(data)
@@ -307,7 +382,7 @@ bivariate_pd <- function(x, z, year, n) {
 
   for (i in 1:length(points)) {
     if (is.factor(data[[names(points)[i]]])) {
-      points[[i]] <- na.omit(unique(data[[variable]]))
+      points[[i]] <- na.omit(unique(data[[names(points)[i]]]))
     } else {
       idx = !is.na(data[[names(points)[i]]])
       if (all(round(data[idx, names(points)[i]]) == data[idx, names(points)[i]])) {
@@ -327,6 +402,7 @@ bivariate_pd <- function(x, z, year, n) {
 }
 
 write_results <- function(res, pars, prefix) {
+  ## write partial dependence results lists to file
   for (i in 1:length(res)) {
     tmp <- res[[i]]
     save(tmp, file = paste0(dir_prefix,

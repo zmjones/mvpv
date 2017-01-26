@@ -2,7 +2,7 @@ seed <- 1987
 set.seed(seed)
 
 ## load and preprocess data
-pkgs <- c("party", "mmpf", "reshape2", "stringr", "ddalpha", "batchtools")
+pkgs <- c("party", "mmpf", "reshape2", "stringr", "batchtools")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 path <- unlist(str_split(getwd(), "/"))
@@ -17,9 +17,21 @@ resources <- list(walltime = 24 * 60 * 60, memory = "24gb", nodes = 1L,
 options(batchtools.progress = FALSE)
 pars <- CJ(x = regime$name, year = c(1970, 1990))
 
+## fit bivariate models
+fit_bv_reg <- makeRegistry("fit_bv_registry", packages = pkgs, seed = seed)
+fit_bv_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
+batchMap(estimate_bv, x = pars$x, year = pars$year,
+  more.args = list(regime = regime))
+submitJobs(reg = fit_bv_reg, resources = resources)
+waitForJobs(reg = fit_bv_reg)
+bv_fits <- reduceResultsList(reg = fit_bv_reg)
+bv_preds <- lapply(bv_fits, predict)
+## need to adapt viz code
+## write_results(bv_fits, pars, "fit_bv")
+
+## fit models
 fit_reg <- makeRegistry("fit_registry", packages = pkgs, seed = seed)
 fit_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
-
 batchMap(estimate, x = pars$x, year = pars$year,
   more.args = list(explanatory = explanatory, regime = regime))
 batchExport(list(preprocess = preprocess, dir_prefix = dir_prefix), reg = fit_reg)
@@ -28,6 +40,27 @@ waitForJobs(reg = fit_reg)
 fits <- reduceResultsList(reg = fit_reg)
 write_results(fits, pars, "fit")
 
+## fit/predict multi target models for comparison
+fit_multi_reg <- makeRegistry("fit_multi_registry", packages = pkgs, seed = seed)
+fit_multi_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
+batchMap(estimate_multi_target, x = pars$x, year = pars$year,
+  more.args = list(explanatory = explanatory, regime = regime))
+submitJobs(reg = fit_multi_reg, resources = resources)
+waitForJobs(reg = fit_multi_reg)
+fits_multi <- reduceResultsList(reg = fits_multi_reg)
+write_results(fits_multi, pars, "fits_multi")
+
+## fit/predict single target models for comparison
+fit_single_reg <- makeRegistry("fit_single_registry", packages = pkgs, seed = seed)
+fit_single_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
+batchMap(estimate_single_target, x = pars$x, year = pars$year,
+  more.args = list(explanatory = explanatory, regime = regime))
+submitJobs(reg = fit_single_reg, resources = resources)
+waitForJobs(reg = fit_single_reg)
+fits_single <- reduceResultsList(reg = fits_single_reg)
+write_results(fits_single, pars, "fits_single")
+
+## univariate partial dependence
 pd_reg <- makeRegistry("pd_registry", packages = pkgs, seed = seed)
 pd_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_reg)
@@ -38,6 +71,7 @@ waitForJobs(reg = pd_reg)
 pd <- reduceResultsList(findDone(reg = pd_reg), reg = pd_reg)
 write_results(pd, pars[unlist(findDone(reg = pd_reg), )], "pd")
 
+## bivariate partial dependence
 pd_int_reg <- makeRegistry("pd_int_registry", packages = pkgs, seed = seed)
 pd_int_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_int_reg)

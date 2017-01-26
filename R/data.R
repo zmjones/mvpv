@@ -1,4 +1,4 @@
-pkgs <- c("dplyr", "assertthat", "rio", "stringr", "lubridate", "feather", "countrycode")
+pkgs <- c("dplyr", "assertthat", "rio", "stringr", "lubridate", "countrycode")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 source("functions.R")
@@ -7,25 +7,38 @@ path <- unlist(str_split(getwd(), "/"))
 dir_prefix <- ifelse(path[length(path)] == "R", "../", "./")
 data_prefix <- paste0(dir_prefix, "data/")
 
-xpolity <- import(paste0(data_prefix, "xpolity.csv"))
-assert_that(!anyDuplicated(xpolity))
+## xpolity data (from yon, i guess from vreeland?)
+xpolity <- import(paste0(data_prefix, "xpolity.csv")) %>%
+  rename(xpolity_nas = x_polity) %>%
+  mutate(xpolity = ifelse(xpolity_nas < -6, NA, xpolity_nas),
+    year = as.integer(year))
 
-fariss <- import(paste0(data_prefix, "fariss.csv"))[, c(1:2,18:19)]
-colnames(fariss) <- c("ccode", "year", "latent_mean", "latent_sd")
-fariss$ccode <- as.integer(fariss$ccode)
-assert_that(!anyDuplicated(fariss))
+## fariss' repression estimates (APSR paper, posterior mean)
+## exclude subdivision of israel
+fariss <- import(paste0(data_prefix, "fariss.csv")) %>%
+  select(ccode = COW, year = YEAR, latent_mean = latentmean) %>%
+  filter(!ccode %in% c(666.001, 666.002, 666.003),
+    !(ccode == 255 & year == 1990),
+    !(ccode == 679 & year == 1990)) %>% ## exclusions?
+  mutate(ccode = as.integer(recode(ccode, `255` = 260,
+    `679` = 678)))
 
-gtd <- read_feather(paste0(data_prefix, "gtd.feather"))
-gtd <- select(gtd, year = iyear, ccode = country, nkill)
-gtd <- gtd %>% group_by(ccode, year) %>%
-  summarise(terror_events = length(nkill), terror_killed = sum(nkill))
-assert_that(!anyDuplicated(gtd))
+## gtd data from website
+gtd <- import(paste0(data_prefix, "gtd.csv")) %>%
+  select(year = iyear, ccode = country, nkill) %>%
+  group_by(ccode, year) %>%
+  summarise(terror_events = length(nkill), terror_killed = sum(nkill, na.rm = TRUE)) %>%
+  ungroup()
 
-mid <- import(paste0(data_prefix, "mid.csv"))[, c(4,7,10,18)]
-mid <- expand_years(mid)
-mid <- mid %>% group_by(ccode, year) %>% summarize(max_hostlevel = max(HostLev, na.rm = TRUE))
-assert_that(!anyDuplicated(mid))
+## mid data from website
+mid <- import(paste0(data_prefix, "mid.csv")) %>%
+  select(ccode, StYear, EndYear, HostLev) %>%
+  expand_years() %>%
+  group_by(ccode, year) %>%
+  summarize(max_hostlevel = max(HostLev, na.rm = TRUE)) %>%
+  ungroup()
 
+## ucdp conflict onset from website
 ucdp_conflict <- import(paste0(data_prefix, "ucdp_onset.csv")) %>%
   select(onset = onset1v414, intensity = maxintyearv414, ccode = gwno, year,
     count = nototconfv414) %>%
@@ -35,33 +48,40 @@ ucdp_conflict <- import(paste0(data_prefix, "ucdp_onset.csv")) %>%
     cconflict_count = ifelse(intensity == 1, count, 0)) %>%
   select(ccode, year, cwar_onset, cconflict_onset, cwar_count, cconflict_count)
 
+## ucdp ged from website
 ged <- import(paste0(data_prefix, "ged.csv")) %>%
   filter(type_of_violence %in% c("2", "3")) %>%
   mutate(ccode = countrycode(country, "country.name", "cown"),
     osv_deaths = as.integer(ifelse(type_of_violence == 3, best_est, NA)),
-    nsv_deaths = as.integer(ifelse(type_of_violence == 2, best_est, NA))) %>%
+    nsv_deaths = as.integer(ifelse(type_of_violence == 2, best_est, NA)),
+    year = as.integer(year)) %>%
   select(ccode, year, osv_deaths, nsv_deaths) %>%
   group_by(year, ccode) %>%
-  summarise(osv_deaths = sum(osv_deaths, na.rm = TRUE), nsv_deaths = sum(nsv_deaths, na.rm = TRUE))
-ged$year <- as.integer(ged$year)
+  summarise(osv_deaths = sum(osv_deaths, na.rm = TRUE),
+    nsv_deaths = sum(nsv_deaths, na.rm = TRUE)) %>%
+  ungroup()
 
+## uds data from website (posterior mean)
 uds <- import(paste0(data_prefix, "uds.csv"))
-assert_that(!anyDuplicated(uds))
 
-uds_xpolity <- import(paste0(data_prefix, "uds_xpolity.csv"))[, c(3,2,4)]
-colnames(uds_xpolity)[c(1,3)] <- c("ccode", "uds_xpolity")
-uds_xpolity$year <- as.integer(uds_xpolity$year)
-assert_that(!anyDuplicated(uds_xpolity))
+## posterior mean from re-fit uds w/ xpolity data (using their package and uds.R)
+uds_xpolity <- import(paste0(data_prefix, "uds_xpolity.csv")) %>%
+  select(ccode = cowcode, year = year, uds_xpolity = mean) %>%
+  mutate(year = as.integer(year), ccode = as.integer(ccode))
 
-poly <- import(paste0(data_prefix, "polyarchy.dta"))[, c(2,4,6)]
-colnames(poly)[3] <- "ccode"
-assert_that(!anyDuplicated(poly))
+## polarchy data (via yon)
+poly <- import(paste0(data_prefix, "polyarchy.dta")) %>%
+  select(ccode = ssno, year, part) %>%
+  mutate(year = as.integer(year),
+    ccode = as.integer(ccode),
+    part = as.numeric(part))
 
-polity <- import(paste0(data_prefix, "polity.csv"))
-polity <- polity %>% select(ccode, year, xrcomp, xropen, xrreg, parreg, xconst, durable) %>%
+## polity data from website
+polity <- import(paste0(data_prefix, "polity.csv")) %>%
+  select(ccode, year, xrcomp, xropen, xrreg, parreg, xconst, durable) %>%
   mutate(durable = ifelse(durable == 0, 1, 0))
-assert_that(!anyDuplicated(polity))
 
+## gleditsch and ward membership data from gledtisch's website
 gw <- read.delim(paste0(data_prefix, "iisystem.dat"), header = FALSE)
 colnames(gw) <- c("ccode", "abb", "name", "start", "end")
 gw$start <- dmy(gw$start)
@@ -71,114 +91,91 @@ gw <- lapply(1:nrow(gw), function(x) {
   cbind("ccode" = gw[x, "ccode"], "year" = years)
 })
 gw <- as.data.frame(do.call("rbind", gw))
-
 gw <- gw %>% group_by(ccode) %>%
   mutate(start_year = min(year)) %>%
-  mutate(newstate = ifelse((year - start_year) <= 2 & start_year > 1816, 1, 0))
-gw$start_year <- NULL
-gw <- ungroup(gw)
+  mutate(newstate = ifelse((year - start_year) <= 2 & start_year > 1816, 1, 0),
+    start_year = NULL) %>%
+  ungroup()
 
-geddes <- import(paste0(data_prefix, "geddes.dta"))[, c(1:2,5)]
-colnames(geddes) <- c("ccode", "year", "geddes")
-geddes$ccode <- as.integer(geddes$ccode)
-geddes$year <- as.integer(geddes$year)
-assert_that(!anyDuplicated(geddes))
+## geddes data (via yon)
+geddes <- import(paste0(data_prefix, "geddes.dta"))[, c(1:2,5)] %>%
+  select(ccode = cowcode, year = year, geddes = gwf_regimetype) %>%
+  mutate(ccode = as.integer(ccode), year = as.integer(year))
 
-ciri <- import(paste0(data_prefix, "ciri.csv"))[, c(2,4,10:13)]
-colnames(ciri) <- tolower(colnames(ciri))
-ciri <- rename(ciri, ccode = cow)
-ciri <- ciri[!duplicated(ciri), ]
-assert_that(!anyDuplicated(ciri))
+## gleditsch filled-in real gdp per capita data from website
+ksg <- import(paste0(data_prefix, "ksg.txt")) %>%
+  select(ccode = statenum, year, pop, rgdppc) %>%
+  mutate(pop = log(pop), rgdppc = log(rgdppc))
 
-ksg <- import(paste0(data_prefix, "ksg.txt"))[, c(1,3:4,6)]
-colnames(ksg)[1] <- "ccode"
-ksg$pop <- log(ksg$pop)
-ksg$rgdppc <- log(ksg$rgdppc)
-assert_that(!anyDuplicated(ksg))
+## epr data from website
+epr_exclpop <- import(paste0(data_prefix, "epr_exclpop.txt")) %>%
+  rename(ccode = cowcode)
 
-epr_exclpop <- import(paste0(data_prefix, "epr_exclpop.txt"))
-names(epr_exclpop)[2] <- "ccode"
-assert_that(!anyDuplicated(epr_exclpop))
+## epr data from website
+epr_oil <- import(paste0(data_prefix, "epr_oilpc.txt")) %>%
+  rename(ccode = cowcode)
 
-epr_oil <- import(paste0(data_prefix, "epr_oilpc.txt"))
-names(epr_oil)[2] <- "ccode"
-assert_that(!anyDuplicated(epr_oil))
+## fearon's elf data (via yon)
+fearon_elf <- import(paste0(data_prefix, "fearon_elf.csv")) %>%
+  rename(ccode = gwno)
 
-fearon_elf <- import(paste0(data_prefix, "fearon_elf.csv"))
-names(fearon_elf)[1] <- "ccode"
-fearon_elf$ccode[fearon_elf$ccode == 255] <- 260
-fearon_elf$ccode[fearon_elf$ccode == 340] <- 345
-fearon_elf$ccode[fearon_elf$ccode == 678] <- 670
+## idea data (via yon)
+idea <- import(paste0(data_prefix, "idea.dta")) %>%
+  select(year, ccode = gwno, violent_protest = violprot_idea,
+    nonviolent_protest = nonvprot_idea) %>%
+  mutate_each(funs(as.integer)) %>%
+  filter(year <= 2004 & !is.na(ccode) & ccode != 9999999)
 
-idea <- import(paste0(data_prefix, "idea.dta"))
-colnames(idea)[2:4] <- c("ccode", "violent_protest", "nonviolent_protest")
-idea$year <- as.integer(idea$year)
-idea$ccode <- as.integer(idea$ccode)
-assert_that(!anyDuplicated(idea))
+## banks data (via yon)
+banks <- import(paste0(data_prefix, "banks_wilson.dta")) %>%
+  select(year, ccode = gwno,
+    violent_protest = violprot_banks,
+    nonviolent_protest = nonvprot_banks) %>%
+  mutate_each(funs(as.integer)) %>%
+  filter(year > 2004)
+## combine idea and banks counts (banks inserted starting in 2004)
+protest <- rbind(idea, banks)
 
+## apply ccode fixes
 data_list <- list(gw, fariss, gtd, mid, ucdp_conflict, uds, uds_xpolity, poly, polity,
-  geddes, ciri, ksg, epr_exclpop, epr_oil, idea, xpolity, ged)
-data_list <- lapply(data_list, function(x) ccode_fix(x))
+  geddes, ksg, epr_exclpop, epr_oil, xpolity, ged, protest)
 
-df <- Reduce(function(x, y) left_join(x, y, by = c("ccode", "year")), data_list)
-df <- left_join(df, fearon_elf, by = "ccode")
-df <- df[!duplicated(df), ] ## not sure where this is coming from, investigate further
-assert_that(!anyDuplicated(df))
+## join everything together
+df <- Reduce(function(x, y) left_join(x, y, by = c("ccode", "year")), data_list) %>%
+  left_join(., fearon_elf, by = "ccode")
 
-df <- df %>% mutate(max_hostlevel = ifelse(is.na(max_hostlevel) & year >= 1816, 0, max_hostlevel),
+## fill in zeroes for some missings
+## setup factors with appropriate labels
+df <- df %>% mutate(
+  max_hostlevel = ifelse(is.na(max_hostlevel) & year >= 1816, 0, max_hostlevel),
   cwar_onset = ifelse(is.na(cwar_onset) & year >= 1946, 0, cwar_onset),
   cconflict_onset = ifelse(is.na(cconflict_onset) & year >= 1946, 0, cconflict_onset),
   cwar_count = ifelse(is.na(cwar_count) & year >= 1946, 0, cwar_count),
   cconflict_count = ifelse(is.na(cconflict_count) & year >= 1946, 0, cconflict_count),
   terror_killed = ifelse(is.na(terror_killed) & year >= 1970, 0, terror_killed),
   terror_events = ifelse(is.na(terror_events) & year >= 1970, 0, terror_events),
-  violent_protest = ifelse(is.na(violent_protest) & year >= 1990, 0, violent_protest),
-  nonviolent_protest = ifelse(is.na(nonviolent_protest) & year >= 1990, 0, nonviolent_protest),
   osv_deaths = ifelse(is.na(osv_deaths) & year >= 1989, 0, osv_deaths),
-  nsv_deaths = ifelse(is.na(nsv_deaths) & year >= 1989, 0, nsv_deaths))
+  nsv_deaths = ifelse(is.na(nsv_deaths) & year >= 1989, 0, nsv_deaths),
+  xrcomp = factor(xrcomp, labels = xrcomp_labels),
+  xropen = factor(xropen, labels = xropen_labels),
+  xrreg = factor(xrreg, labels = xrreg_labels),
+  parreg = factor(parreg, labels = parreg_labels),
+  xconst = factor(xconst, labels = xconst_labels),
+  geddes = as.factor(ifelse(is.na(geddes) | geddes == "NA", "non-autocracy", geddes)),
+  max_hostlevel = factor(max_hostlevel,
+    labels = c("no dispute",
+      "no militarized action",
+      "threat to use force",
+      "display of force",
+      "use of force",
+      "war"), ordered = TRUE),
+  newstate = factor(newstate,
+    labels = c("not a recent entrant", "entry into system in last two years"))
+)
 
-## use these as predictors
-miss_codes <- c(-88, -77, -66)
-miss_labels <- c("transition", "interregnum", "interruption")
-xrcomp_labels <- c("unregulated", "selection", "dual/transitional", "election")
-xropen_labels <- c("unregulated", "closed", "dual executive-designation", "dual executive-election", "open")
-xrreg_labels <- c("selection", "dual/transitional", "election")
-parreg_labels <- c("unregulated", "multiple identity", "sectarian", "restricted", "regulated")
-xconst_labels <- c("unregulated", "unlimited", "intermediate 1", "slight/moderate", "intermediate 2",
-  "substantial", "party/subordination")
+## check for duplicate country years
+assert_that(!anyDuplicated(df[, c("ccode", "year")]))
 
-xrcomp_labels <- c(miss_labels, xrcomp_labels)
-xropen_labels <- c(miss_labels, xropen_labels)
-xrreg_labels <- c(miss_labels, xrreg_labels)
-parreg_labels <- c(miss_labels, parreg_labels)
-xconst_labels <- c(miss_labels, xconst_labels)
-
-df$xrcomp <- factor(df$xrcomp, labels = xrcomp_labels)
-df$xropen <- factor(df$xropen, labels = xropen_labels)
-df$xrreg <- factor(df$xrreg, labels = xrreg_labels)
-df$parreg <- factor(df$parreg, labels = parreg_labels)
-df$xconst <- factor(df$xconst, labels = xconst_labels)
-
-df$disap[df$disap < 0 | df$disap > 2] <- NA
-df$kill[df$kill < 0 | df$kill > 2] <- NA
-df$polpris[df$polpris < 0 | df$polpris > 2] <- NA
-df$tort[df$tort < 0 | df$tort > 2] <- NA
-
-df$geddes[is.na(df$geddes) | df$geddes == "NA"] <- "non-autocracy"
-df$geddes <- as.factor(df$geddes)
-df$max_hostlevel <- factor(df$max_hostlevel,
-  labels = c("no dispute",
-    "no militarized action",
-    "threat to use force",
-    "display of force",
-    "use of force",
-    "war"), ordered = TRUE)
-ciri_labels <- c("frequent", "occasional", "none")
-df$disap <- factor(df$disap, labels = ciri_labels, ordered = TRUE)
-df$tort <- factor(df$tort, labels = ciri_labels, ordered = TRUE)
-df$kill <- factor(df$kill, labels = ciri_labels, ordered = TRUE)
-df$polpris <- factor(df$polpris, labels = ciri_labels, ordered = TRUE)
-df$newstate <- factor(df$newstate, labels = c("not a recent entrant", "entry into system in last two years"))
-
+## write two different time periods to file
 export(df[df$year <= 2008 & df$year >= 1990, ], paste0(data_prefix, "1990_2008_rep.csv"))
 export(df[df$year <= 2008 & df$year >= 1970, ], paste0(data_prefix, "1970_2008_rep.csv"))
