@@ -10,8 +10,8 @@ data_prefix <- paste0(dir_prefix, "data/")
 
 ## xpolity data (from yon, i guess from vreeland?)
 xpolity <- import(paste0(data_prefix, "xpolity.csv")) %>%
-  rename(xpolity_nas = x_polity) %>%
-  mutate(xpolity = ifelse(xpolity_nas < -6, NA, xpolity_nas),
+  rename(xpolity = x_polity) %>%
+  mutate(xpolity_nas = ifelse(xpolity < -6, NA, xpolity),
     year = as.integer(year))
 
 ## fariss' repression estimates (APSR paper, posterior mean)
