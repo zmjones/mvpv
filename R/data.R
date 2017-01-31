@@ -2,6 +2,7 @@ pkgs <- c("dplyr", "assertthat", "rio", "stringr", "lubridate", "countrycode")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 source("functions.R")
+source("global.R")
 
 path <- unlist(str_split(getwd(), "/"))
 dir_prefix <- ifelse(path[length(path)] == "R", "../", "./")
@@ -19,7 +20,7 @@ fariss <- import(paste0(data_prefix, "fariss.csv")) %>%
   select(ccode = COW, year = YEAR, latent_mean = latentmean) %>%
   filter(!ccode %in% c(666.001, 666.002, 666.003),
     !(ccode == 255 & year == 1990),
-    !(ccode == 679 & year == 1990)) %>% ## exclusions?
+    !(ccode == 679 & year == 1990)) %>% ## exclusions for transitions?
   mutate(ccode = as.integer(recode(ccode, `255` = 260,
     `679` = 678)))
 
@@ -123,8 +124,12 @@ fearon_elf <- import(paste0(data_prefix, "fearon_elf.csv")) %>%
 idea <- import(paste0(data_prefix, "idea.dta")) %>%
   select(year, ccode = gwno, violent_protest = violprot_idea,
     nonviolent_protest = nonvprot_idea) %>%
+  mutate(ccode = recode(ccode, `255` = 260, `679` = 678)) %>%
   mutate_each(funs(as.integer)) %>%
-  filter(year <= 2004 & !is.na(ccode) & ccode != 9999999)
+  filter(year <= 2004 & !is.na(ccode) & ccode != 9999999 &
+           !(ccode == 260 & is.na(violent_protest)) &
+           ccode != 679 &
+           !(ccode == 678 & is.na(violent_protest)))
 
 ## banks data (via yon)
 banks <- import(paste0(data_prefix, "banks_wilson.dta")) %>%

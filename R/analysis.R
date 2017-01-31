@@ -24,10 +24,9 @@ batchMap(estimate_bv, x = pars$x, year = pars$year,
   more.args = list(regime = regime))
 submitJobs(reg = fit_bv_reg, resources = resources)
 waitForJobs(reg = fit_bv_reg)
-bv_fits <- reduceResultsList(reg = fit_bv_reg)
-bv_preds <- lapply(bv_fits, predict)
+fits_bv <- reduceResultsList(reg = fit_bv_reg)
 ## need to adapt viz code
-## write_results(bv_fits, pars, "fit_bv")
+write_results(fits_bv, pars, "fit_bv")
 
 ## fit models
 fit_reg <- makeRegistry("fit_registry", packages = pkgs, seed = seed)
@@ -47,7 +46,7 @@ batchMap(estimate_multi_target, x = pars$x, year = pars$year,
   more.args = list(explanatory = explanatory, regime = regime))
 submitJobs(reg = fit_multi_reg, resources = resources)
 waitForJobs(reg = fit_multi_reg)
-fits_multi <- reduceResultsList(reg = fits_multi_reg)
+fits_multi <- reduceResultsList(reg = fit_multi_reg)
 write_results(fits_multi, pars, "fits_multi")
 
 ## fit/predict single target models for comparison
@@ -57,7 +56,7 @@ batchMap(estimate_single_target, x = pars$x, year = pars$year,
   more.args = list(explanatory = explanatory, regime = regime))
 submitJobs(reg = fit_single_reg, resources = resources)
 waitForJobs(reg = fit_single_reg)
-fits_single <- reduceResultsList(reg = fits_single_reg)
+fits_single <- reduceResultsList(reg = fit_single_reg)
 write_results(fits_single, pars, "fits_single")
 
 ## univariate partial dependence

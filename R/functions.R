@@ -305,8 +305,10 @@ estimate_bv <- function(year, x, regime) {
     stringsAsFactors = TRUE)
   data <- preprocess(data, regime$name)
   form <- paste0(paste0(data$outcomes, collapse = " + "), " ~ ", x)
-  cforest(as.formula(form), data = data$df, weights = data$weights,
+  fit <- cforest(as.formula(form), data = data$df, weights = data$weights,
     controls = data$control)
+  preds <- as.data.frame(do.call("rbind", predict(fit)))
+  cbind(preds, data[, x])
 }
 
 estimate <- function(year, x, regime, explanatory) {
@@ -328,30 +330,101 @@ estimate_multi_target <- function(year, x, regime, explanatory) {
   data <- preprocess(data, regime$name)
   form <- paste0(paste0(data$outcomes, collapse = "+"), "~",
     paste0(c(explanatory$name, x), collapse = "+"))
-  idx <- data$df$year < 2008
-  fit <- cforest(as.formula(form), data = data$df[idx, ],
-    weights = data$weights[idx, ], controls = data$control)
-  do.call("rbind", predict(fit, newdata = data$df[!idx, ]))
+  years <- (year + 1):2008
+  out <- sapply(years, function(current_year) {
+    fit <- cforest(as.formula(form),
+      data = data$df[data$df$year < current_year, ],
+      weights = data$weights[data$df$year < current_year, ],
+      controls = data$control)
+    preds <- as.data.frame(do.call("rbind",
+      predict(fit, newdata = data$df[data$df$year == current_year, ])))
+    preds$year <- current_year
+    return(preds)
+  }, simplify = FALSE)
+  do.call("rbind", out)
 }
 
 estimate_single_target <- function(year, x, regime, explanatory) {
-  ## fit separate models to each outcome variable with 2008 held out
-  ## and then compute predictions for 2008
+  ## fit separate models to each outcome variable with future years held out
+  ## begin rolling from start year + 1 to 2007, and compute predictions for the
+  ## future from this
   data <- read.csv(paste0("../data/", year, "_2008_rep.csv"),
     stringsAsFactors = TRUE)
   data <- preprocess(data, regime$name)
-  idx <- data$df$year < 2008
-  do.call("cbind", sapply(data$outcomes[1:2], function(y) {
-    form <- paste0(y, "~", paste0(c(explanatory$name, x), collapse = "+"))
-    fit <- cforest(as.formula(form), data = data$df[idx, ],
-      weights = data$weights[idx, ], controls = data$control)
-    predict(fit, newdata = data$df[!idx, ])
-  }, simplify = FALSE, USE.NAMES = TRUE))
+  years <- (year + 1):2008
+  out <- sapply(years, function(current_year) {
+    preds <- as.data.frame(do.call("cbind",
+      sapply(data$outcomes, function(current_outcome) {
+        form <- paste0(current_outcome, "~", paste0(c(explanatory$name, x), collapse = "+"))
+        fit <- cforest(as.formula(form), data = data$df[data$df$year < current_year, ],
+          weights = data$weights[data$df$year < current_year, ], controls = data$control)
+        preds <- predict(fit, newdata = data$df[data$df$year == current_year, ],
+          type = ifelse(is.factor(data$df[[current_outcome]]), "prob", "response"))
+        if (current_outcome == "max_hostlevel") {
+          preds <- as.data.frame(do.call("rbind", preds))
+          preds <- preds["max_hostlevel.use.of.force"]
+        }
+        return(preds)
+      }, simplify = FALSE, USE.NAMES = TRUE)
+    ))
+    preds$year <- current_year
+    return(preds)
+  }, simplify = FALSE)
+  do.call("rbind", out)
 }
 
-## some loss functions
-mse <- function(y, yhat) mean((y - yhat)^2)
-mce <- function(y, yhat) mean(y != yhat)
+contrast_error <- function(x, year) {
+  load(paste0(dir_prefix, "results/fits_single_", x, "_", year, ".RData"))
+  single <- tmp
+  load(paste0(dir_prefix, "results/fits_multi_", x, "_", year, ".RData"))
+  multi <- tmp
+
+  data <- read.csv(paste0("../data/", year, "_2008_rep.csv"),
+    stringsAsFactors = TRUE)
+  data <- preprocess(data, regime$name)$df
+  data <- data[data$year > year, ]
+
+  single <- compute_error(data, single)
+  single$method <- "individual models"
+  multi <- compute_error(data, multi)
+  multi$method <- "multivariate model"
+  plt <- rbind(sing, multi)
+
+  p <- ggplot(plt, aes(year, med, color = method)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = lwr, ymax = upr)) +
+    facet_wrap(~ variable, scales = "free_y")
+  ## save plot
+}
+
+compute_error <- function(data, preds, contrast = function(x, y) abs(x - y)) {
+  ## compute mean error using contrast function for each outcome variable
+  preds <- preds %>%
+    select(one_of(outcomes$name)) %>%
+    rename(use.of.force = max_hostlevel.use.of.force)
+
+  data <- data %>%
+    mutate(use.of.force = ifelse(max_hostlevel == "use of force", 1, 0)) %>%
+    select(one_of(c(colnames(preds), "year")))
+
+  errors <- as.data.frame(matrix(NA, nrow(preds), ncol(preds)))
+  colnames(errors) <- colnames(preds)
+
+  for (x in colnames(preds)) {
+    errors[, x] <- contrast(preds[, x], data[, x])
+  }
+  errors$year <- data$year
+
+  ## compute .25, .5, and .75 quantiles for abs errors
+  errors %>%
+    gather(variable, error, -year) %>%
+    group_by(year, variable) %>%
+    summarise(
+      lwr = quantile(error, .25),
+      med = quantile(error, .5),
+      upr = quantile(error, .75)) %>%
+    ungroup()
+}
 
 univariate_pd <- function(x, year, n) {
   ## estimate univariate partial dependence

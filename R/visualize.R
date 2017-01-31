@@ -17,64 +17,16 @@ invisible(lapply(data, function(x) regime_density(x[, c(regime$name, "year")])))
 invisible(lapply(data, function(x)
   outcome_cor(x[, which(colnames(x) %in% c(outcomes$name, "year"))])))
 
-## for (i in 1:length(data)) {
-##   for (j in 1:length(regime$name)) {
-##     test <- data[[i]]
-##     test <- preprocess(data[[i]], regime$name[j])
-##     form <- paste0(paste0(test$outcomes, collapse = " + "), " ~ ", regime$name[j])
-##     fit = cforest(as.formula(form),
-##       data = test$df, controls = test$control,
-##       weights = test$weights)
-##     n <- c(10, NA)
-##     if (is.factor(test$df[[regime$name[j]]])) {
-##       points <- data.frame(na.omit(unique(test$df[[regime$name[j]]])))
-##     } else {
-##       if (all(round(test$df[[regime$name[j]]], 0) == test$df[[regime$name[j]]])) {
-##         points <- data.frame(na.omit(unique(test$df[[regime$name[j]]])))
-##       } else {
-##         points <- data.frame(seq(min(test$df[[regime$name[j]]], na.rm = TRUE),
-##           max(test$df[[regime$name[j]]], na.rm = TRUE),
-##           length.out = n[1]))
-##       }
-##     }
-##     names(points) <- regime$name[j]
-##     preds <- do.call("rbind", predict(fit, newdata = points))
-##     preds <- data.table(preds, points)
-##     preds <- preds[, colnames(preds) %in% all$name, with = FALSE]
-##     setnames(preds, colnames(preds), all$label[match(colnames(preds), all$name)])
-##     xvar <- colnames(preds)[colnames(preds) %in% regime$label]
-##     plt <- melt(preds, id.vars = xvar, variable.name = "Outcome",
-##       value.name = "Bivariate Model Prediction")
-##     xvar <- paste0("`", xvar, "`")
-##     p <- ggplot(plt, aes_string(xvar, "`Bivariate Model Prediction`", group = 1)) +
-##       geom_point(stat = 'summary', fun.y = sum)
-##     if (regime$name[j] != "xpolity_nas")
-##       p <- p + stat_summary(fun.y = sum, geom = "line")
-##     else
-##       p <- p + geom_vline(aes(xintercept = 2.5), linetype = "dashed")
-
-##     fname <- paste("bv", regime$name[j],
-##       str_extract(names(data)[i], "[0-9]{4}"), sep = "_")
-##     fpath <- paste0(dir_prefix, "figures/", fname, ".png")
-##     if (grepl("1990", names(data)[i])) {
-##       p <- p + facet_wrap(~ Outcome, nrow = 3, ncol = 4, scales = "free_y")
-##       ggsave(fpath, p, width = 12, height = 6)
-##     } else {
-##       p <- p + facet_wrap(~ Outcome, nrow = 2, ncol = 4, scales = "free_y")
-##       ggsave(fpath, p, width = 12, height = 4)
-##     }
-##   }
-## }
-
 files <- dir(paste0(dir_prefix, "results/"))
-files <- files[str_detect(files, "^pd*")]
+pd_files <- files[str_detect(files, "^pd*")]
+pd_interaction_files <- pd_files[str_detect(pd_files, "int")]
+pd_univariate_files <- pd_files[!pd_files %in% pd_interaction_files]
 
-pd_interaction_files <- files[str_detect(files, "int")]
-pd_univariate_files <- files[!files %in% pd_interaction_files]
+univariate_files <- c(files[str_detect(files, "^fit_bv_*")])
 
-invisible(lapply(pd_univariate_files, function(x) {
+invisible(lapply(univariate_files, function(x) {
   load(paste0(dir_prefix, "results/", x))
-  pd <- data.table(Reduce("cbind", tmp))
+  pd <- data.table(tmp)
   pd <- pd[, colnames(pd) %in% all$name, with = FALSE]
   setnames(pd, colnames(pd), all$label[match(colnames(pd), all$name)])
   xvar <- colnames(pd)[colnames(pd) %in% regime$label]
@@ -96,7 +48,7 @@ invisible(lapply(pd_univariate_files, function(x) {
     ggsave(fpath, p, width = 12, height = 4)
   } else {
     p <- p + facet_wrap(~ Outcome, nrow = 3, ncol = 4, scales = "free_y")
-    ggsave(fpath, p, width = 12, height = 6)
+    ggsave(fpath, p, width = 14, height = 7)
   }
 }))
 
@@ -124,3 +76,4 @@ invisible(lapply(pd_interaction_files, function(x) {
   do.call(grid.arrange, p)
   dev.off()
 }))
+
