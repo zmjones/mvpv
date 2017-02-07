@@ -36,6 +36,8 @@ outcomes <- list(
 outcomes <- as.data.frame(do.call(rbind, outcomes), stringsAsFactors = FALSE)
 colnames(outcomes) <- c("name", "label")
 
+outcomes_1970 <- outcomes[!str_detect(outcomes$name, "protest|osv_deaths|nsv_deaths"), ]
+
 all <- rbind(regime, explanatory, outcomes)
 
 ## xpolity labels
