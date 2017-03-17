@@ -7,7 +7,7 @@ regime_density <- function(data) {
   plt <- melt(data, id.vars = NULL, na.rm = TRUE, value.factor = FALSE)
   p <- ggplot(plt, aes(value)) + stat_density() + facet_wrap(~ variable, scales = "free")
   ggsave(paste0(dir_prefix, "figures/", year, "_2008_",
-    "regime_variables_density.png"), p, width = 10, height = 8)
+    "regime_variables_density.png"), p, width = 10, height = 5)
 }
 
 outcome_cor <- function(x) {
@@ -273,6 +273,7 @@ plot_bivariate <- function(tmp, label = "Partial Dependence") {
   d <- as.data.table(tmp)
   colnames(d) <- str_replace(colnames(d), "^points\\.|^prediction\\.", "")
   d <- d[, colnames(d) %in% all$name, with = FALSE]
+  d$latent_mean <- d$latent_mean * -1
   setnames(d, colnames(d), all$label[match(colnames(d), all$name)])
   xvar <- colnames(d)[colnames(d) %in% regime$label]
   plt <- melt(d, id.vars = xvar,
@@ -292,6 +293,7 @@ plot_bivariate <- function(tmp, label = "Partial Dependence") {
 plot_trivariate <- function(tmp) {
   pd <- data.table(tmp)
   pd <- pd[, colnames(tmp) %in% all$name, with = FALSE]
+  pd$latent_mean <- pd$latent_mean * -1
   x <- colnames(pd)[colnames(pd) %in% regime$name]
   y <- colnames(pd)[colnames(pd) %in% explanatory$name]
   lapply(colnames(pd)[colnames(pd) %in% outcomes$name], function(z) {

@@ -5,7 +5,3 @@ data/uds_xpolity.csv: R/uds.R
 
 data/rep.csv: R/data.R data/uds_xpolity.csv
 	$(RCMD) R/data.R
-
-figures/*.png: R/visualize.R
-	$(RCMD) R/visualize.R
-

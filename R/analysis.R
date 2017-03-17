@@ -108,8 +108,7 @@ batchMap(bivariate_pd, x = pars$x, year = pars$year, z = pars$z,
 submitJobs(resources = resources, reg = pd_int_reg)
 waitForJobs(reg = pd_int_reg)
 pd_int <- reduceResultsList(reg = pd_int_reg)
-pd_int_plots <- lapply(pd_int, plot_trivariate)
-write_results(pd_int, pars[unlist(findDone(reg = pd_int_reg), )], "pd_int_")
+pd_int_plots <- unlist(lapply(pd_int, plot_trivariate), FALSE)
 
 ## create some summary plots of the data
 data <- list(
@@ -118,7 +117,7 @@ data <- list(
 )
 
 ## regime measure density plot
-invisible(lapply(data, function(x) regime_density))
+invisible(lapply(data, regime_density))
 
 ## outcome variable correlation heatmap
 invisible(lapply(data, function(x)
