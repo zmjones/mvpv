@@ -2,7 +2,8 @@ seed <- 1987
 set.seed(seed)
 
 ## load and preprocess data
-pkgs <- c("party", "mmpf", "reshape2", "stringr", "batchtools", "rio")
+pkgs <- c("party", "mmpf", "reshape2", "stringr", "batchtools", ## "rio",
+  "ggplot2", "data.table")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 path <- unlist(str_split(getwd(), "/"))
@@ -19,23 +20,35 @@ options(batchtools.progress = FALSE)
 pars <- CJ(x = regime$name, year = c(1970, 1990))
 
 ## fit bivariate models
-fit_bv_reg <- makeRegistry("fit_bv_registry", packages = pkgs, seed = seed)
-fit_bv_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
+fit_bv_reg <- makeRegistry("fit_bv_registry", packages = "party", seed = seed)
+fit_bv_reg$cluster.functions <- makeClusterFunctionsTORQUE("template.tmpl")
 batchMap(estimate, x = pars$x, year = pars$year, more.args = list(covariates = FALSE))
+batchExport(list(preprocess = preprocess, dir_prefix = dir_prefix,
+  data_prefix = data_prefix, outcomes = outcomes,
+  outcomes_1970 = outcomes_1970, explanatory = explanatory,
+  regime = regime), reg = fit_bv_reg)
 submitJobs(reg = fit_bv_reg, resources = resources)
 waitForJobs(reg = fit_bv_reg)
 fits_bv <- reduceResultsList(reg = fit_bv_reg)
-## need to adapt viz code
+fits_bv <- lapply(fits_bv, function(x) {
+  design <- uniformGrid(x@data@env$input, 10)
+  data.table(do.call("rbind", predict(x, newdata = design)), design)
+})
+bv_plots <- lapply(fits_bv, plot_bivariate, label = "Bivariate Prediction")
+write_figures(bv_plots, pars, label = "bv_")
 write_results(fits_bv, pars, "fit_bv")
 
 ## fit models
-fit_reg <- makeRegistry("fit_registry", packages = pkgs, seed = seed)
-fit_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
+fit_reg <- makeRegistry("fit_registry", packages = "party", seed = seed)
+fit_reg$cluster.functions <- makeClusterFunctionsTORQUE("template.tmpl")
 batchMap(estimate, x = pars$x, year = pars$year)
-batchExport(list(preprocess = preprocess, dir_prefix = dir_prefix), reg = fit_reg)
+batchExport(list(preprocess = preprocess, dir_prefix = dir_prefix,
+  data_prefix = data_prefix, outcomes = outcomes,
+  outcomes_1970 = outcomes_1970, explanatory = explanatory,
+  regime = regime), reg = fit_reg)
 submitJobs(reg = fit_reg, resources = resources)
 waitForJobs(reg = fit_reg)
-fits <- reduceResultsList(reg = fit_reg)
+fits <- reduceResultsList(findDone(reg = fit_reg), reg = fit_reg)
 write_results(fits, pars, "fit")
 
 ## fit/predict multi target models for comparison
@@ -66,28 +79,47 @@ fits_single <- reduceResultsList(reg = fit_single_reg)
 write_results(fits_single, pred_pars, "fits_single")
 
 ## compute errors and create a comparison plot
-invisible(lapply(as.list(t(pred_pars)),
-  function(x) contrast_error(x[1], as.integer(x[2]), as.integer(x[3]))))
+pred_pars %>% rowwise() %>% do(contrast_error(x, year, hold_out))
+## invisible(lapply(as.list(t(pred_pars)),
+##   function(x) contrast_error(x[1], as.integer(x[2]), as.integer(x[3]))))
 
 ## univariate partial dependence
-pd_reg <- makeRegistry("pd_registry", packages = pkgs, seed = seed)
-pd_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
+pd_reg <- makeRegistry("pd_registry", packages = "mmpf", seed = seed)
+pd_reg$cluster.functions <- makeClusterFunctionsTORQUE("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_reg)
 batchMap(univariate_pd, x = pars$x, year = pars$year,
-  more.args = list(n = c(10, NA)), reg = pd_reg)
+  more.args = list(n = c(10, NA), p = .1), reg = pd_reg)
 submitJobs(resources = resources, reg = pd_reg)
 waitForJobs(reg = pd_reg)
 pd <- reduceResultsList(findDone(reg = pd_reg), reg = pd_reg)
 write_results(pd, pars[unlist(findDone(reg = pd_reg), )], "pd")
+pd_plots <- lapply(pd, plot_bivariate)
+write_figures(pd_plots, pars, "pd_")
 
 ## bivariate partial dependence
-pd_int_reg <- makeRegistry("pd_int_registry", packages = pkgs, seed = seed)
-pd_int_reg$cluster.functions <- makeClusterFunctionsTorque("template.tmpl")
+pd_int_reg <- makeRegistry("pd_int_registry", packages = "mmpf", seed = seed)
+pd_int_reg$cluster.functions <- makeClusterFunctionsTORQUE("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_int_reg)
-pars <- CJ(x = regime$name, year = c(1970, 1990), z = explanatory$name)
+## not computing all of them right now
+## pars <- CJ(x = regime$name, year = c(1970, 1990), z = explanatory$name)
+pars <- CJ(x = regime$name, year = 1970, z = "year")
 batchMap(bivariate_pd, x = pars$x, year = pars$year, z = pars$z,
-  more.args = list(n = c(10, NA)), reg = pd_int_reg)
+  more.args = list(n = c(10, NA), p = .05), reg = pd_int_reg)
 submitJobs(resources = resources, reg = pd_int_reg)
 waitForJobs(reg = pd_int_reg)
 pd_int <- reduceResultsList(reg = pd_int_reg)
-write_results(pd_int, pars[unlist(findDone(reg = pd_int_reg), )], "pd_int")
+pd_int_plots <- lapply(pd_int, plot_trivariate)
+write_results(pd_int, pars[unlist(findDone(reg = pd_int_reg), )], "pd_int_")
+
+## create some summary plots of the data
+data <- list(
+  df_1990_2008 = read.csv(paste0(dir_prefix, "data/1990_2008_rep.csv")),
+  df_1970_2008 = read.csv(paste0(dir_prefix, "data/1970_2008_rep.csv"))
+)
+
+## regime measure density plot
+invisible(lapply(data, function(x) regime_density))
+
+## outcome variable correlation heatmap
+invisible(lapply(data, function(x)
+  outcome_cor(x[, which(colnames(x) %in% c(outcomes$name, "year"))])))

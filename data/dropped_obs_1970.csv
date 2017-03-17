@@ -1,7 +1,7 @@
-"ccode","year","newstate","latent_mean","terror_events","terror_killed","max_hostlevel","cwar_onset","cconflict_onset","cwar_count","cconflict_count","uds","uds_xpolity","part","xrcomp","xropen","xrreg","parreg","xconst","durable","geddes","pop","rgdppc","exclpop","oilpc","xpolity","xpolity_nas","osv_deaths","nsv_deaths","violent_protest","nonviolent_protest","ethfrac"
-343,1991,"entry into system in last two years",NA,0,0,"no dispute",0,0,0,0,0.4872798,0.529638897382895,23,"dual/transitional","open","dual/transitional","multiple identity","intermediate 2",1,"non-autocracy",7.56152213365137,8.4993998242044,NA,NA,"4","4",0,0,0,0,0.5095635
-340,2006,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,NA,NA,NA,NA,NA,NA,NA,NA,NA,"non-autocracy",8.91036302143025,9.11010558618034,NA,NA,NA,NA,0,0,NA,NA,NA
-340,2007,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,NA,NA,NA,NA,NA,NA,NA,NA,NA,"non-autocracy",8.90640831411625,9.17868044391495,NA,NA,NA,NA,0,0,NA,NA,NA
-340,2008,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,NA,NA,NA,NA,NA,NA,NA,NA,NA,"non-autocracy",8.90245559220688,9.23694043252317,NA,NA,NA,NA,0,0,NA,NA,NA
-698,1970,"not a recent entrant",NA,0,0,"no dispute",0,0,0,1,-1.862860953,-1.29680520769551,0,"selection","closed","election","restricted","unregulated",0,"monarchy",6.59537059388998,10.2663394795734,NA,NA,"-6","-6",NA,NA,NA,NA,0.23702
-760,1970,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,-1.863644297,-1.31100671761549,0,"selection","closed","election","restricted","unregulated",0,"non-autocracy",5.71002958741667,7.19819105650554,NA,NA,"-6","-6",NA,NA,NA,NA,0.6796604
+"ccode","year","newstate","latent_mean","terror_killed","terror_events","max_hostlevel","cwar_onset","cconflict_onset","cwar_count","cconflict_count","uds_xpolity","pop","rgdppc","exclpop","oilpc","xpolity","xpolity_nas","osv_deaths","nsv_deaths","violent_protest","nonviolent_protest","durable","ethfrac"
+343,1991,"entry into system in last two years",NA,0,0,"no dispute",0,0,0,0,0.529638897382895,7.56152213365137,8.4993998242044,NA,NA,"4","4",0,0,0,0,1,0.5095635
+340,2006,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,NA,8.91036302143025,9.11010558618034,NA,NA,NA,NA,0,0,NA,NA,NA,NA
+340,2007,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,NA,8.90640831411625,9.17868044391495,NA,NA,NA,NA,0,0,NA,NA,NA,NA
+340,2008,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,NA,8.90245559220688,9.23694043252317,NA,NA,NA,NA,0,0,NA,NA,NA,NA
+698,1970,"not a recent entrant",NA,0,0,"no dispute",0,0,0,1,-1.29680520769551,6.59537059388998,10.2663394795734,NA,NA,"-6","-6",NA,NA,NA,NA,0,0.23702
+760,1970,"not a recent entrant",NA,0,0,"no dispute",0,0,0,0,-1.31100671761549,5.71002958741667,7.19819105650554,NA,NA,"-6","-6",NA,NA,NA,NA,0,0.6796604

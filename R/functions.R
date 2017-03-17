@@ -1,10 +1,13 @@
 regime_density <- function(data) {
   ## estimates univariate densities for regime variables and plots by data (1990 or 1970)
-  plt <- melt(data[, -which(colnames(data) == "year")], id.vars = NULL, na.rm = TRUE)
-  plt$value <- as.numeric(plt$value)
+  data <- data.table(data)
+  year <- min(data$year)
+  data <- data[, colnames(data) %in% regime$name, with = FALSE]
+  setnames(data, colnames(data), regime$label[match(colnames(data), regime$name)])
+  plt <- melt(data, id.vars = NULL, na.rm = TRUE, value.factor = FALSE)
   p <- ggplot(plt, aes(value)) + stat_density() + facet_wrap(~ variable, scales = "free")
-  ggsave(paste0(dir_prefix, "figures/", min(data$year), "_", max(data$year), "_",
-    "regime_variables_density.png"), width = 10, height = 8)
+  ggsave(paste0(dir_prefix, "figures/", year, "_2008_",
+    "regime_variables_density.png"), p, width = 10, height = 8)
 }
 
 outcome_cor <- function(x) {
@@ -28,7 +31,7 @@ outcome_cor <- function(x) {
 
 preprocess <- function(df, regime_variables) {
   ## preprocesses data before models are fit
-  df$latent_mean <- df$latent_mean * -1 ## rescale so that higher = more abuse
+  ## df$latent_mean <- df$latent_mean * -1 ## rescale so that higher = more abuse
   df$xpolity <- factor(df$xpolity, ordered = FALSE)
   df$xpolity_nas <- factor(df$xpolity_nas, ordered = TRUE)
 
@@ -42,7 +45,7 @@ preprocess <- function(df, regime_variables) {
   else
     outcomes <- outcomes$name
   
-  outcomes <- str_replace(outcomes, ".use.of.force", "")
+  outcomes <- gsub(".use.of.force", "", outcomes)
 
   ## write any obs. that have missings on the outcomes to file
   ## missingness in predictors is *not* dropped
@@ -83,8 +86,8 @@ expand_years <- function(df, idx = c(2, 3)) {
 estimate <- function(year, x, covariates = TRUE, hold_out = NULL,
                      multivariate = TRUE) {
   ## load and preprocess the appropriate data
-  data <- read.csv(paste0(data_prefix, year, "_2008_rep.csv")) %>%
-    preprocess(regime$name)
+  data <- read.csv(paste0(data_prefix, year, "_2008_rep.csv"))
+  data <- preprocess(data, regime$name)
 
   ## find indices for training/holdout data if applicable
   idx <- rep(TRUE, nrow(data$df))
@@ -104,7 +107,9 @@ estimate <- function(year, x, covariates = TRUE, hold_out = NULL,
       controls = data$control)
 
     if (!is.null(hold_out)) {
-      do.call("rbind", predict(fit, newdata = data$df[data$df$year == hold_out, ]))
+      return(do.call("rbind", predict(fit, newdata = data$df[data$df$year == hold_out, ])))
+    } else {
+      return(fit)
     }
   } else {
     fit <- lapply(data$outcomes,
@@ -120,16 +125,18 @@ estimate <- function(year, x, covariates = TRUE, hold_out = NULL,
       }
     )
     if (!is.null(hold_out)) {
-      do.call("cbind",
+      return(do.call("cbind",
         lapply(fit, function(m) {
           if (m@responses@is_ordinal) {
             do.call("rbind",
               predict(m, newdata = data$df[data$df$year == hold_out, ], type = "prob"))
           } else {
-            predict(m, newdata = data$df[data$df$year == hold_out, ])
+            return(predict(m, newdata = data$df[data$df$year == hold_out, ]))
           }
         })
-      )
+      ))
+    } else {
+      return(fit)
     }
   }
 }
@@ -187,30 +194,39 @@ compute_error <- function(data, preds, contrast = function(x, y) abs(x - y)) {
     ungroup()
 }
 
-univariate_pd <- function(x, year, n) {
+univariate_pd <- function(x, year, n, p = .25) {
   ## estimate univariate partial dependence
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
   data <- tmp@data@env$input
-  n[2] <- nrow(data)
+  if (is.na(n[2]))
+    n[2] <- floor(p * nrow(data))
 
-  if (is.factor(data[[x]]) || all(round(data[[x]], 0) == data[[x]]))  {
-    points <- list(na.omit(unique(data[[x]])))
-    n[1] <- NA
+  if (is.factor(data[[x]])) {
+    points <- na.omit(unique(data[[x]]))
   } else {
-    points <- list(seq(min(data[[x]], na.rm = TRUE), max(data[[x]], na.rm = TRUE),
-      length.out = n[1]))
+    if (all(round(data[[x]]) == data[[x]])) {
+      points <- unique(data[idx, x])
+    } else {
+      points <- seq(min(data[x], na.rm = TRUE),
+        max(data[x], na.rm = TRUE),
+        length.out = n[1])
+    }
   }
+
+  points <- list(points)
   names(points) <- x
-  marginalPrediction(data, x, n, tmp, points = points, aggregate.fun = mean,
+  
+  marginalPrediction(data, x, n, tmp, points = points,
     predict.fun = function(object, newdata)
       do.call("rbind", object@predict_response(newdata)))
 }
 
-bivariate_pd <- function(x, z, year, n) {
+bivariate_pd <- function(x, z, year, n, p = .05) {
   ## estimate bivariate partial dependence
   load(paste0(dir_prefix, "results/fit_", x, "_", year, ".RData"))
   data <- tmp@data@env$input
-  n[2] <- nrow(data)
+  if (is.na(n[2]))
+    n[2] <- floor(p * nrow(data))
   points <- vector("list", 2L)
   names(points) <- c(x, z)
 
@@ -236,11 +252,72 @@ bivariate_pd <- function(x, z, year, n) {
 }
 
 write_results <- function(res, pars, prefix) {
-  ## write partial dependence results lists to file
+  ## write results lists to file
   for (i in 1:length(res)) {
     tmp <- res[[i]]
     save(tmp, file = paste0(dir_prefix,
       "results/", prefix, "_", paste0(pars[i, ], collapse = "_"), ".RData"))
   }
   NULL
+}
+
+write_figures <- function(res, pars, label = "") {
+  for (i in 1:length(res)) {
+    ggsave(paste0(dir_prefix, "figures/", label,
+      "_", paste0(pars[i, ], collapse = "_"), ".png"),
+      res[[i]], width = 12, height = 7)
+  }
+}
+
+plot_bivariate <- function(tmp, label = "Partial Dependence") {
+  d <- as.data.table(tmp)
+  colnames(d) <- str_replace(colnames(d), "^points\\.|^prediction\\.", "")
+  d <- d[, colnames(d) %in% all$name, with = FALSE]
+  setnames(d, colnames(d), all$label[match(colnames(d), all$name)])
+  xvar <- colnames(d)[colnames(d) %in% regime$label]
+  plt <- melt(d, id.vars = xvar,
+    variable.name = "Outcome", value.name = label)
+  p <- ggplot(plt, aes_string(paste0("`", xvar, "`"),
+    paste0("`", label, "`"), group = 1)) +
+    geom_point(stat = 'summary', fun.y = sum)
+
+  if (xvar != "X-Polity (w/ missing categories)")
+    p <- p + stat_summary(fun.y = sum, geom = "line")
+  else
+    p <- p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
+
+  p + facet_wrap(~ Outcome, scales = "free_y")
+}
+
+plot_trivariate <- function(tmp) {
+  pd <- data.table(tmp)
+  pd <- pd[, colnames(tmp) %in% all$name, with = FALSE]
+  x <- colnames(pd)[colnames(pd) %in% regime$name]
+  y <- colnames(pd)[colnames(pd) %in% explanatory$name]
+  lapply(colnames(pd)[colnames(pd) %in% outcomes$name], function(z) {
+    p <- ggplot(pd,
+      aes_string(paste0("`", x, "`"),
+      paste0("`", y, "`"), fill = paste0("`", z, "`"))) +
+      geom_raster() +
+      labs(x = regime$label[regime$name == x],
+        y = explanatory$label[explanatory$name == y]) +
+      scale_fill_continuous(guide = guide_colourbar(title = outcomes$label[outcomes$name == z]),
+        low = "white", high = "black")
+
+    fname <- paste("pd", x, y, z, sep = "_")
+    fname <- paste0(fname, ".png")
+    fpath <- paste0(dir_prefix, "figures/", fname)
+    ggsave(fpath, p, width = 10, height = 6)
+    p
+  })
+}
+
+get_ccode_range <- function(d, codes = c(678, 679, 680, 364, 365, 255, 260, 265,
+  816, 817, 818)) {
+  out <- data.frame(codes, min = NA, max = NA)
+  for (i in 1:nrow(out)) {
+    suppressWarnings(out$min[i] <- min(d$year[d$ccode == out$codes[i]]))
+    suppressWarnings(out$max[i] <- max(d$year[d$ccode == out$codes[i]]))
+  }
+  out
 }
