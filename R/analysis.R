@@ -93,8 +93,10 @@ submitJobs(resources = resources, reg = pd_reg)
 waitForJobs(reg = pd_reg)
 pd <- reduceResultsList(findDone(reg = pd_reg), reg = pd_reg)
 write_results(pd, pars[unlist(findDone(reg = pd_reg), )], "pd")
+for (i in 1:length(pd))
+  plot_bivariate(pd[[i]], single = TRUE, pars$year[i])
 pd_plots <- lapply(pd, plot_bivariate)
-write_figures(pd_plots, pars, "pd_")
+write_figures(pd_plots, pars, "pd")
 
 ## bivariate partial dependence
 pd_int_reg <- makeRegistry("pd_int_registry", packages = "mmpf", seed = seed)
@@ -102,8 +104,8 @@ pd_int_reg$cluster.functions <- makeClusterFunctionsTORQUE("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_int_reg)
 ## not computing all of them right now
 ## pars <- CJ(x = regime$name, year = c(1970, 1990), z = explanatory$name)
-pars <- CJ(x = regime$name, year = 1970, z = "year")
-batchMap(bivariate_pd, x = pars$x, year = pars$year, z = pars$z,
+int_pars <- CJ(x = regime$name, year = 1970, z = "year")
+batchMap(bivariate_pd, x = int_pars$x, year = int_pars$year, z = int_pars$z,
   more.args = list(n = c(10, NA), p = .05), reg = pd_int_reg)
 submitJobs(resources = resources, reg = pd_int_reg)
 waitForJobs(reg = pd_int_reg)

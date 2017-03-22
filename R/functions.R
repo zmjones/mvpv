@@ -4,16 +4,24 @@ regime_density <- function(data) {
   year <- min(data$year)
   data <- data[, colnames(data) %in% regime$name, with = FALSE]
   setnames(data, colnames(data), regime$label[match(colnames(data), regime$name)])
-  plt <- melt(data, id.vars = NULL, na.rm = TRUE, value.factor = FALSE)
-  p <- ggplot(plt, aes(value)) + stat_density() + facet_wrap(~ variable, scales = "free")
+  plt <- melt(data[, c(1, 3)], id.vars = NULL, na.rm = TRUE, value.factor = FALSE)
+  
+  
+  p <- ggplot(plt, aes(value)) +
+    stat_density() + facet_wrap(~ variable, scales = "free")
   ggsave(paste0(dir_prefix, "figures/", year, "_2008_",
-    "regime_variables_density.png"), p, width = 10, height = 5)
+    "regime_variables_density.png"), p, width = 8, height = 5)
+
+  p <- ggplot(data[, 2, drop = FALSE], aes(x = `X-Polity (w/ missing categories)`)) +
+    geom_histogram(fill = "black")
+  ggsave(paste0(dir_prefix, "figures/", year, "_2008_",
+    "regime_variables_density_nas.png"), p, width = 5, height = 5)
 }
 
 outcome_cor <- function(x) {
   ## estimates hetcor matrix for predictors
-  library("polycor")
   x <- data.table(x)
+  x$latent_mean <- x$latent_mean * -1
   min_year <- min(x$year)
   if (min_year < 1990)
     outcomes <- outcomes[!grepl("protest|osv_deaths|nsv_deaths", outcomes$name), ]
@@ -265,29 +273,50 @@ write_figures <- function(res, pars, label = "") {
   for (i in 1:length(res)) {
     ggsave(paste0(dir_prefix, "figures/", label,
       "_", paste0(pars[i, ], collapse = "_"), ".png"),
-      res[[i]], width = 12, height = 7)
+      res[[i]], width = 10, height = 6)
   }
 }
 
-plot_bivariate <- function(tmp, label = "Partial Dependence") {
+plot_bivariate <- function(tmp, single = FALSE,
+                           start_year, label = "Partial Dependence") {
   d <- as.data.table(tmp)
   colnames(d) <- str_replace(colnames(d), "^points\\.|^prediction\\.", "")
   d <- d[, colnames(d) %in% all$name, with = FALSE]
   d$latent_mean <- d$latent_mean * -1
-  setnames(d, colnames(d), all$label[match(colnames(d), all$name)])
-  xvar <- colnames(d)[colnames(d) %in% regime$label]
-  plt <- melt(d, id.vars = xvar,
-    variable.name = "Outcome", value.name = label)
-  p <- ggplot(plt, aes_string(paste0("`", xvar, "`"),
-    paste0("`", label, "`"), group = 1)) +
-    geom_point(stat = 'summary', fun.y = sum)
+  x <- colnames(d)[colnames(d) %in% regime$name]
 
-  if (xvar != "X-Polity (w/ missing categories)")
-    p <- p + stat_summary(fun.y = sum, geom = "line")
-  else
-    p <- p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
+  if (single) {
+    lapply(colnames(d)[colnames(d) %in% outcomes$name], function(z) {
+      p <- ggplot(d, aes_string(paste0("`", x, "`"),
+        paste0("`", z, "`"), group = 1)) +
+        geom_point(stat = 'summary', fun.y = sum)
+      if (x != "X-Polity (w/ missing categories)")
+        p <- p + stat_summary(fun.y = sum, geom = "line")
+      else
+        p <- p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
 
-  p + facet_wrap(~ Outcome, scales = "free_y")
+      p <- p + labs(x = regime$label[regime$name == x], y = label)
+
+      fname <- paste("pd", x, z, start_year, sep = "_")
+      fname <- paste0(fname, ".png")
+      fpath <- paste0(dir_prefix, "figures/", fname)
+      ggsave(fpath, p, width = 8, height = 5)
+      p
+    })
+  } else {
+    plt <- melt(d, id.vars = x,
+      variable.name = "Outcome", value.name = label)
+    p <- ggplot(plt, aes_string(paste0("`", x, "`"),
+      paste0("`", label, "`"), group = 1)) +
+      geom_point(stat = 'summary', fun.y = sum)
+
+    if (x != "X-Polity (w/ missing categories)")
+      p <- p + stat_summary(fun.y = sum, geom = "line")
+    else
+      p <- p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
+
+    p + facet_wrap(~ Outcome, scales = "free_y", ncol = 3, nrow = 4)
+  }
 }
 
 plot_trivariate <- function(tmp) {
@@ -309,7 +338,7 @@ plot_trivariate <- function(tmp) {
     fname <- paste("pd", x, y, z, sep = "_")
     fname <- paste0(fname, ".png")
     fpath <- paste0(dir_prefix, "figures/", fname)
-    ggsave(fpath, p, width = 10, height = 6)
+    ggsave(fpath, p, width = 8, height = 5)
     p
   })
 }
