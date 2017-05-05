@@ -4,18 +4,21 @@ regime_density <- function(data) {
   year <- min(data$year)
   data <- data[, colnames(data) %in% regime$name, with = FALSE]
   setnames(data, colnames(data), regime$label[match(colnames(data), regime$name)])
-  plt <- melt(data[, c(1, 3)], id.vars = NULL, na.rm = TRUE, value.factor = FALSE)
-  
-  
-  p <- ggplot(plt, aes(value)) +
-    stat_density() + facet_wrap(~ variable, scales = "free")
-  ggsave(paste0(dir_prefix, "figures/", year, "_2008_",
-    "regime_variables_density.png"), p, width = 8, height = 5)
+  plt <- melt(data, id.vars = NULL, na.rm = TRUE, value.factor = FALSE)
 
-  p <- ggplot(data[, 2, drop = FALSE], aes(x = `X-Polity (w/ missing categories)`)) +
-    geom_histogram(fill = "black")
-  ggsave(paste0(dir_prefix, "figures/", year, "_2008_",
-    "regime_variables_density_nas.png"), p, width = 5, height = 5)
+  p.xpolity = ggplot(plt[plt$variable == "X-Polity", ], aes(value)) + geom_bar() +
+    labs(x = "X-Polity")
+  ggsave(paste0(dir_prefix, "figures/", year, "_2008_", "xpolity_density.png"),
+    p.xpolity, width = 8, height = 5)
+  p.xpolity.nas = ggplot(plt[plt$variable == "X-Polity (w/ missing categories)", ],
+    aes(value)) + geom_bar() +
+    labs(x = "X-Polity (w/ missing categories)")
+  ggsave(paste0(dir_prefix, "figures/", year, "_2008_", "xpolity_nas_density.png"),
+    p.xpolity.nas, width = 8, height = 5)
+  p.xuds = ggplot(plt[plt$variable == "X-UDS", ], aes(value)) + geom_density(fill = "black") +
+    labs(x = "X-UDS")
+  ggsave(paste0(dir_prefix, "figures/", year, "_2008_", "x_uds_density.png"),
+    p.xuds, width = 8, height = 5)
 }
 
 outcome_cor <- function(x) {
@@ -278,13 +281,13 @@ write_figures <- function(res, pars, label = "") {
 }
 
 plot_bivariate <- function(tmp, single = FALSE,
-                           start_year, label = "Partial Dependence") {
+                           start_year, label = "Partial Dependence", separate = TRUE) {
   d <- as.data.table(tmp)
   colnames(d) <- str_replace(colnames(d), "^points\\.|^prediction\\.", "")
   d <- d[, colnames(d) %in% all$name, with = FALSE]
   d$latent_mean <- d$latent_mean * -1
   x <- colnames(d)[colnames(d) %in% regime$name]
-
+  
   if (single) {
     lapply(colnames(d)[colnames(d) %in% outcomes$name], function(z) {
       p <- ggplot(d, aes_string(paste0("`", x, "`"),
@@ -294,9 +297,9 @@ plot_bivariate <- function(tmp, single = FALSE,
         p <- p + stat_summary(fun.y = sum, geom = "line")
       else
         p <- p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
-
+      
       p <- p + labs(x = regime$label[regime$name == x], y = label)
-
+      
       fname <- paste("pd", x, z, start_year, sep = "_")
       fname <- paste0(fname, ".png")
       fpath <- paste0(dir_prefix, "figures/", fname)
@@ -304,18 +307,49 @@ plot_bivariate <- function(tmp, single = FALSE,
       p
     })
   } else {
-    plt <- melt(d, id.vars = x,
-      variable.name = "Outcome", value.name = label)
-    p <- ggplot(plt, aes_string(paste0("`", x, "`"),
-      paste0("`", label, "`"), group = 1)) +
-      geom_point(stat = 'summary', fun.y = sum)
-
-    if (x != "X-Polity (w/ missing categories)")
-      p <- p + stat_summary(fun.y = sum, geom = "line")
-    else
-      p <- p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
-
-    p + facet_wrap(~ Outcome, scales = "free_y", ncol = 3, nrow = 4)
+    setnames(d, colnames(d), all$label[match(colnames(d), all$name)])
+    x = all$label[all$name == x]
+    
+    if (separate) {
+      first = c("cwar_onset", "cconflict_onset", "terror_killed",
+        "terror_events", "latent_mean")
+      second = outcomes$label[!outcomes$name %in% first]
+      first = outcomes$label[outcomes$name %in% first]
+      
+      plt.first = melt(d[, colnames(d) %in% c(x, first), with = FALSE], id.vars = x,
+        variable.name = "Outcome", value.name = label)
+      p.first <- ggplot(plt.first, aes_string(paste0("`", x, "`"),
+        paste0("`", label, "`"), group = 1)) +
+        geom_point(stat = 'summary', fun.y = sum)
+      if (x != "X-Polity (w/ missing categories)")
+        p.first <- p.first + stat_summary(fun.y = sum, geom = "line")
+      else
+        p.first <- p.first + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
+      p.first <- p.first + facet_wrap(~ Outcome, scales = "free", ncol = 3)
+      
+      plt.second = melt(d[, colnames(d) %in% c(x, second), with = FALSE], id.vars = x,
+        variable.name = "Outcome", value.name = label)
+      p.second <- ggplot(plt.second, aes_string(paste0("`", x, "`"),
+        paste0("`", label, "`"), group = 1)) +
+        geom_point(stat = 'summary', fun.y = sum)
+      if (x != "X-Polity (w/ missing categories)")
+        p.second <- p.second + stat_summary(fun.y = sum, geom = "line")
+      else
+        p.second <- p.second + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
+      p.second <- p.second + facet_wrap(~ Outcome, scales = "free", ncol = 3)
+      return(list(p.first, p.second))
+    } else {
+      plt = melt(d, id.vars = x,
+        variable.name = "Outcome", value.name = label)
+      p <- ggplot(plt, aes_string(paste0("`", x, "`"),
+        paste0("`", label, "`"), group = 1)) +
+        geom_point(stat = 'summary', fun.y = sum)
+      if (x != "X-Polity (w/ missing categories)")
+        p <- p + stat_summary(fun.y = sum, geom = "line")
+      else
+        p <- p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
+      return(list(p))
+    }
   }
 }
 

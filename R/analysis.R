@@ -93,9 +93,12 @@ submitJobs(resources = resources, reg = pd_reg)
 waitForJobs(reg = pd_reg)
 pd <- reduceResultsList(findDone(reg = pd_reg), reg = pd_reg)
 write_results(pd, pars[unlist(findDone(reg = pd_reg), )], "pd")
-for (i in 1:length(pd))
+for (i in 1:length(pd)) ## single file per combination
   plot_bivariate(pd[[i]], single = TRUE, pars$year[i])
-pd_plots <- lapply(pd, plot_bivariate)
+pd_plots <- lapply(pd, plot_bivariate, separate = TRUE) ## facetted
+pd_plots = unlist(pd_plots, FALSE)
+pars = pars[rep(1:nrow(pars), each = 2), ]
+pars$type = rep(c("main", "secondary"), nrow(pars) / 2)
 write_figures(pd_plots, pars, "pd")
 
 ## bivariate partial dependence
