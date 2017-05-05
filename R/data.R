@@ -1,12 +1,13 @@
-pkgs <- c("dplyr", "assertthat", "rio", "stringr", "lubridate", "countrycode")
+pkgs = c("assertthat", "data.table", "stringr", "lubridate", "countrycode", "foreign",
+  "dplyr", "dtplyr")
 invisible(sapply(pkgs, library, character.only = TRUE))
 
 source("functions.R")
 source("global.R")
 
-path <- unlist(str_split(getwd(), "/"))
-dir_prefix <- ifelse(path[length(path)] == "R", "../", "./")
-data_prefix <- paste0(dir_prefix, "data/")
+path = unlist(str_split(getwd(), "/"))
+dir_prefix = ifelse(path[length(path)] == "R", "../", "./")
+data_prefix = paste0(dir_prefix, "data/")
 
 ## ccode fixing rules
 
@@ -36,55 +37,55 @@ data_prefix <- paste0(dir_prefix, "data/")
 ## recode 255 to 260 after 1990
 
 ## xpolity data (from yon, i guess from vreeland?)
-xpolity <- import(paste0(data_prefix, "xpolity.csv")) %>%
+xpolity = fread(paste0(data_prefix, "xpolity.csv")) %>%
   rename(xpolity = x_polity) %>%
   mutate(xpolity_nas = ifelse(xpolity < -6, NA, xpolity),
     year = as.integer(year))
 ## xpolity[xpolity$ccode %in% c(678, 679) & xpolity$year == 1990, ]
 ## taking the non-missing one
-xpolity <- xpolity[!(xpolity$year == 1990 & xpolity$ccode == 679), ]
-xpolity$ccode[xpolity$ccode == 679] <- 678
+xpolity = xpolity[!(year == 1990 & ccode == 679), ]
+xpolity$ccode[xpolity$ccode == 679] = 678
 ## both are the same for 1976, so drop one
 ## xpolity[xpolity$ccode %in% c(816, 818) & xpolity$year == 1976, ]
-xpolity <- xpolity[!(xpolity$ccode == 818 & xpolity$year == 1976), ]
-xpolity$ccode[xpolity$ccode == 818] <- 816
+xpolity = xpolity[!(ccode == 818 & year == 1976), ]
+xpolity$ccode[xpolity$ccode == 818] = 816
 ## 365 is missing between 1922 and 1992
 ## 364 runs over these years, so just recode 364 to 365
-xpolity <- xpolity[!(xpolity$ccode == 364 & xpolity$year == 1922), ]
-xpolity$ccode[xpolity$ccode == 364] <- 365
+xpolity = xpolity[!(ccode == 364 & year == 1922), ]
+xpolity$ccode[xpolity$ccode == 364] = 365
 ## drop the one duplicate 255/260 year and then recode all 255 after 1990 as 260
-xpolity <- xpolity[!(xpolity$ccode == 260 & xpolity$year == 1990), ]
-xpolity$ccode[xpolity$ccode == 255 & xpolity$year >= 1990] <- 260
+xpolity = xpolity[!(ccode == 260 & year == 1990), ]
+xpolity$ccode[xpolity$ccode == 255 & xpolity$year >= 1990] = 260
 
 ## fariss' repression estimates (APSR paper, posterior mean)
 ## exclude subdivision of israel
-fariss <- import(paste0(data_prefix, "fariss.csv")) %>%
+fariss = fread(paste0(data_prefix, "fariss.csv")) %>%
   select(ccode = COW, year = YEAR, latent_mean = latentmean) %>%
   filter(!ccode %in% c(666.001, 666.002, 666.003))
 ## fariss[fariss$ccode %in% c(678, 679, 680) & fariss$year == 1990, ]
 ## going to take the one that corresponds to the 'new' ccode
-fariss <- fariss[!(fariss$ccode == 679 & fariss$year == 1990), ]
-fariss$ccode[fariss$ccode == 679] <- 678
+fariss = fariss[!(ccode == 679 & year == 1990), ]
+fariss$ccode[fariss$ccode == 679] = 678
 ## there is overlap between 255 and 260 in 1990
 ## consistent with the other input data i will drop 255 here
-fariss <- fariss[!(fariss$ccode == 255 & fariss$year == 1990), ]
-fariss$ccode[fariss$ccode == 255 & fariss$year >= 1990] <- 260
+fariss = fariss[!(ccode == 255 & year == 1990), ]
+fariss$ccode[fariss$ccode == 255 & fariss$year >= 1990] = 260
 
 ## gtd data from yon
-gtd <- import(paste0(data_prefix, "gtd_corrected.csv"))
+gtd = fread(paste0(data_prefix, "gtd_corrected.csv"))
 
 ## mid data from website
-mid <- import(paste0(data_prefix, "mid.csv")) %>%
+mid = fread(paste0(data_prefix, "mid.csv")) %>%
   select(ccode, StYear, EndYear, HostLev) %>%
   expand_years() %>%
   group_by(ccode, year) %>%
   summarize(max_hostlevel = max(HostLev, na.rm = TRUE)) %>%
   ungroup()
-mid$ccode[mid$ccode == 679] <- 678
-mid$ccode[mid$ccode == 255 & mid$year >= 1990] <- 260
+mid$ccode[mid$ccode == 679] = 678
+mid$ccode[mid$ccode == 255 & mid$year >= 1990] = 260
 
 ## ucdp conflict onset from website
-ucdp_conflict <- import(paste0(data_prefix, "ucdp_onset.csv")) %>%
+ucdp_conflict = fread(paste0(data_prefix, "ucdp_onset.csv")) %>%
   select(onset = onset1v414, intensity = maxintyearv414, ccode = gwno, year,
     count = nototconfv414) %>%
   mutate(cwar_onset = ifelse(onset == 1 & intensity == 2, 1, 0),
@@ -94,7 +95,7 @@ ucdp_conflict <- import(paste0(data_prefix, "ucdp_onset.csv")) %>%
   select(ccode, year, cwar_onset, cconflict_onset, cwar_count, cconflict_count)
 
 ## ucdp ged from website
-ged <- import(paste0(data_prefix, "ged.csv")) %>%
+ged = fread(paste0(data_prefix, "ged.csv")) %>%
   filter(type_of_violence %in% c("2", "3")) %>%
   mutate(ccode = countrycode(country, "country.name", "cown"),
     osv_deaths = as.integer(ifelse(type_of_violence == 3, best_est, NA)),
@@ -107,92 +108,93 @@ ged <- import(paste0(data_prefix, "ged.csv")) %>%
   ungroup()
 
 ## uds data from website (posterior mean)
-## uds <- import(paste0(data_prefix, "uds.csv"))
+## uds = fread(paste0(data_prefix, "uds.csv"))
 
 ## posterior mean from re-fit uds w/ xpolity data (using their package and uds.R)
-uds_xpolity <- import(paste0(data_prefix, "uds_xpolity.csv")) %>%
+uds_xpolity = fread(paste0(data_prefix, "uds_xpolity.csv")) %>%
   select(ccode = cowcode, year = year, uds_xpolity = mean) %>%
   mutate(year = as.integer(year), ccode = as.integer(ccode))
 
 ## polarchy data (via yon)
-## poly <- import(paste0(data_prefix, "polyarchy.dta")) %>%
+## poly = read.dta(paste0(data_prefix, "polyarchy.dta")) %>%
 ##   select(ccode = ssno, year, part) %>%
 ##   mutate(year = as.integer(year),
 ##     ccode = as.integer(ccode),
 ##     part = as.numeric(part))
 
 ## polity data from website
-polity <- import(paste0(data_prefix, "polity.csv")) %>%
+polity = fread(paste0(data_prefix, "polity.csv")) %>%
   select(ccode, year, durable) %>%
   mutate(durable = ifelse(durable == 0, 1, 0))
-polity <- polity[!(polity$year == 1990 & polity$ccode == 679), ]
-polity$ccode[polity$ccode == 679] <- 678
+polity = polity[!(year == 1990 & ccode == 679), ]
+polity$ccode[polity$ccode == 679] = 678
 ## both are the same for 1976, so drop one
 ## polity[polity$ccode %in% c(816, 818) & polity$year == 1976, ]
-polity <- polity[!(polity$ccode == 818 & polity$year == 1976), ]
-polity$ccode[polity$ccode == 818] <- 816
+polity = polity[!(ccode == 818 & year == 1976), ]
+polity$ccode[polity$ccode == 818] = 816
 ## 365 is missing between 1922 and 1992
 ## 364 runs over these years, so just recode 364 to 365
-polity <- polity[!(polity$ccode == 364 & polity$year == 1922), ]
-polity$ccode[polity$ccode == 364] <- 365
+polity = polity[!(ccode == 364 & year == 1922), ]
+polity$ccode[polity$ccode == 364] = 365
 ## drop the one duplicate 255/260 year and then recode all 255 after 1990 as 260
-polity <- polity[!(polity$ccode == 260 & polity$year == 1990), ]
-polity$ccode[polity$ccode == 255 & polity$year >= 1990] <- 260
+polity = polity[!(ccode == 260 & year == 1990), ]
+polity$ccode[polity$ccode == 255 & polity$year >= 1990] = 260
 
 ## gleditsch and ward membership data from gledtisch's website
-gw <- read.delim(paste0(data_prefix, "iisystem.dat"), header = FALSE)
-colnames(gw) <- c("ccode", "abb", "name", "start", "end")
-gw$start <- dmy(gw$start)
-gw$end <- dmy(gw$end)
-gw <- lapply(1:nrow(gw), function(x) {
-  years <- year(gw[x, "start"]):year(gw[x, "end"])
+gw = fread(paste0(data_prefix, "iisystem.dat"), header = FALSE)
+setnames(gw, colnames(gw), c("ccode", "abb", "name", "start", "end"))
+gw$start = dmy(gw$start)
+gw$end = dmy(gw$end)
+setDF(gw)
+gw = lapply(1:nrow(gw), function(x) {
+  years = year(gw[x, "start"]):year(gw[x, "end"])
   cbind("ccode" = gw[x, "ccode"], "year" = years)
 })
-gw <- as.data.frame(do.call("rbind", gw))
-gw <- gw %>% group_by(ccode) %>%
+gw = as.data.frame(do.call("rbind", gw))
+gw = gw %>% group_by(ccode) %>%
   mutate(start_year = min(year)) %>%
   mutate(newstate = ifelse((year - start_year) <= 2 & start_year > 1816, 1, 0),
     start_year = NULL) %>%
   ungroup()
 
 ## geddes data (via yon)
-## geddes <- import(paste0(data_prefix, "geddes.dta"))[, c(1:2,5)] %>%
+## geddes = import(paste0(data_prefix, "geddes.dta"))[, c(1:2,5)] %>%
 ##   select(ccode = cowcode, year = year, geddes = gwf_regimetype) %>%
 ##   mutate(ccode = as.integer(ccode), year = as.integer(year))
 
 ## gleditsch filled-in real gdp per capita data from website
-ksg <- import(paste0(data_prefix, "ksg.txt")) %>%
+ksg = fread(paste0(data_prefix, "ksg.txt")) %>%
   select(ccode = statenum, year, pop, rgdppc) %>%
   mutate(pop = log(pop), rgdppc = log(rgdppc))
 
 ## epr data from website
-epr_exclpop <- import(paste0(data_prefix, "epr_exclpop.txt")) %>%
+epr_exclpop = fread(paste0(data_prefix, "epr_exclpop.txt")) %>%
   rename(ccode = cowcode)
-epr_exclpop$ccode[epr_exclpop$ccode == 679] <- 678 ## no overlap in this case
-epr_exclpop$ccode[epr_exclpop$ccode == 255 & epr_exclpop$year >= 1990] <- 260
+epr_exclpop$ccode[epr_exclpop$ccode == 679] = 678 ## no overlap in this case
+epr_exclpop$ccode[epr_exclpop$ccode == 255 & epr_exclpop$year >= 1990] = 260
 
 ## epr data from website
-epr_oil <- import(paste0(data_prefix, "epr_oilpc.txt")) %>%
+epr_oil = fread(paste0(data_prefix, "epr_oilpc.txt")) %>%
   rename(ccode = cowcode)
-epr_oil$ccode[epr_oil$ccode == 679] <- 678
-epr_oil$ccode[epr_oil$ccode == 255 & epr_oil$year >= 1990] <- 260
+epr_oil$ccode[epr_oil$ccode == 679] = 678
+epr_oil$ccode[epr_oil$ccode == 255 & epr_oil$year >= 1990] = 260
 
 ## fearon's elf data (via yon)
-fearon_elf <- import(paste0(data_prefix, "fearon_elf.csv")) %>%
+fearon_elf = fread(paste0(data_prefix, "fearon_elf.csv")) %>%
   rename(ccode = gwno)
 
 ## idea data (via yon)
-idea <- import(paste0(data_prefix, "idea.dta")) %>%
+idea = read.dta(paste0(data_prefix, "idea.dta")) %>%
   select(year, ccode = gwno, violent_protest = violprot_idea,
     nonviolent_protest = nonvprot_idea) %>%
   mutate_each(funs(as.integer)) %>%
   filter(year <= 2004 & !is.na(ccode) & ccode != 9999999) %>%
   filter(!(is.na(violent_protest) & is.na(nonviolent_protest)))
-idea$ccode[idea$ccode == 255 & idea$year >= 1990] <- 260
-idea$ccode[idea$ccode == 679] <- 678
+idea$ccode[idea$ccode == 255 & idea$year >= 1990] = 260
+idea$ccode[idea$ccode == 679] = 678
 
 ## banks data (via yon)
-banks <- import(paste0(data_prefix, "banks_wilson.dta")) %>%
+banks = read.dta(paste0(data_prefix, "banks_wilson.dta")) %>%
   select(year, ccode = gwno,
     violent_protest = violprot_banks,
     nonviolent_protest = nonvprot_banks) %>%
@@ -200,17 +202,17 @@ banks <- import(paste0(data_prefix, "banks_wilson.dta")) %>%
   filter(year > 2004)
 
 ## combine idea and banks counts (banks inserted starting in 2004)
-protest <- rbind(idea, banks)
+protest = rbind(idea, banks)
 
 ## join everything together
-data_list <- list(gw, fariss, gtd, mid, ucdp_conflict, uds_xpolity,
+data_list = list(gw, fariss, gtd, mid, ucdp_conflict, uds_xpolity,
   ksg, epr_exclpop, epr_oil, xpolity, ged, protest, polity)
-df <- Reduce(function(x, y) left_join(x, y, by = c("ccode", "year")), data_list) %>%
+df = Reduce(function(x, y) left_join(x, y, by = c("ccode", "year")), data_list) %>%
   left_join(., fearon_elf, by = "ccode")
 
 ## fill in zeroes for some missings
 ## setup factors with appropriate labels
-df <- df %>% mutate(
+df = df %>% mutate(
   max_hostlevel = ifelse(is.na(max_hostlevel) & year >= 1816, 0, max_hostlevel),
   cwar_onset = ifelse(is.na(cwar_onset) & year >= 1946, 0, cwar_onset),
   cconflict_onset = ifelse(is.na(cconflict_onset) & year >= 1946, 0, cconflict_onset),
@@ -238,7 +240,7 @@ df <- df %>% mutate(
 )
 
 ## check for duplicate country years
-df <- df[df$year <= 2008 & df$year >= 1970, ]
+df = df[df$year <= 2008 & df$year >= 1970, ]
 assert_that(!anyDuplicated(df[, c("ccode", "year")]))
 
 ## missingness dumps
@@ -247,5 +249,5 @@ for (x in colnames(df)[-c(1:2)])
     paste0(data_prefix, x, "_missing.csv"), row.names = FALSE)
 
 ## write two different time periods to file
-export(df[df$year <= 2008 & df$year >= 1990, ], paste0(data_prefix, "1990_2008_rep.csv"))
-export(df[df$year <= 2008 & df$year >= 1970, ], paste0(data_prefix, "1970_2008_rep.csv"))
+fwrite(df[df$year <= 2008 & df$year >= 1990, ], paste0(data_prefix, "1990_2008_rep.csv"))
+fwrite(df[df$year <= 2008 & df$year >= 1970, ], paste0(data_prefix, "1970_2008_rep.csv"))
