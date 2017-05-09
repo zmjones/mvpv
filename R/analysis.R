@@ -30,11 +30,11 @@ submitJobs(reg = fit_bv_reg, resources = resources)
 waitForJobs(reg = fit_bv_reg)
 fits_bv = reduceResultsList(reg = fit_bv_reg)
 fits_bv = lapply(fits_bv, function(x) {
-  design = uniformGrid(x@data@env$input, 10)
+  design = uniformGrid(x@data@env$input, 25)
   data.table(do.call("rbind", predict(x, newdata = design)), design)
 })
-bv_plots = lapply(fits_bv, plot_bivariate, label = "Bivariate Prediction")
-write_figures(bv_plots, pars, label = "bv")
+bv_plots = lapply(fits_bv, plot_bivariate, label = "Bivariate Prediction", separate = FALSE)
+write_figures(unlist(bv_plots, FALSE), pars, label = "bv")
 write_results(fits_bv, pars, "fit_bv")
 
 ## fit models
@@ -94,7 +94,11 @@ pd = reduceResultsList(findDone(reg = pd_reg), reg = pd_reg)
 write_results(pd, pars[unlist(findDone(reg = pd_reg), )], "pd")
 for (i in 1:length(pd)) ## single file per combination
   plot_bivariate(pd[[i]], single = TRUE, pars$year[i])
-pd_plots = lapply(pd, plot_bivariate, separate = TRUE) ## facetted
+
+pd_plots = unlist(lapply(pd, plot_bivariate, separate = FALSE, single = FALSE), FALSE)
+write_figures(pd_plots, pars, "pd")
+
+pd_plots = lapply(pd, plot_bivariate, separate = TRUE)
 pd_plots = unlist(pd_plots, FALSE)
 pars = pars[rep(1:nrow(pars), each = 2), ]
 pars$type = rep(c("main", "secondary"), nrow(pars) / 2)

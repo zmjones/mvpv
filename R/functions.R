@@ -273,7 +273,7 @@ write_figures = function(res, pars, label = "") {
   for (i in 1:length(res)) {
     ggsave(paste0(dir_prefix, "figures/", label,
       "_", paste0(pars[i, ], collapse = "_"), ".png"),
-      res[[i]], width = 10, height = 6)
+      res[[i]], width = 10, height = length(unique(res[[i]]$data$Outcome)) * .85)
   }
 }
 
@@ -345,6 +345,7 @@ plot_bivariate = function(tmp, single = FALSE,
         p = p + stat_summary(fun.y = sum, geom = "line")
       else
         p = p + geom_vline(aes(xintercept = 3.5), linetype = "dashed")
+      p = p + facet_wrap(~ Outcome, scales = "free", ncol = 3)
       return(list(p))
     }
   }
