@@ -71,16 +71,41 @@ write_results(fits_multi, pred_pars, "fits_multi")
 ## fit/predict single target models for comparison
 fit_single_reg = makeRegistry("fit_single_registry", packages = pkgs, seed = seed)
 fit_single_reg$cluster.functions = makeClusterFunctionsTorque("template.tmpl")
-batchMap(estimate, x = pred_pars$x, year = pred_pars$year, hold_out = pred_pars$hold_out)
+batchMap(estimate, x = pred_pars$x, year = pred_pars$year, hold_out = pred_pars$hold_out,
+  more.args = list(multivariate = FALSE))
 submitJobs(reg = fit_single_reg, resources = resources)
 waitForJobs(reg = fit_single_reg)
 fits_single = reduceResultsList(reg = fit_single_reg)
 write_results(fits_single, pred_pars, "fits_single")
 
 ## compute errors and create a comparison plot
-pred_pars %>% rowwise() %>% do(contrast_error(x, year, hold_out))
-## invisible(lapply(as.list(t(pred_pars)),
-##   function(x) contrast_error(x[1], as.integer(x[2]), as.integer(x[3]))))
+data = fread(paste0(dir_prefix, "data/1970_2008_rep.csv")) %>%
+  mutate(max_hostlevel.use.of.force = ifelse(max_hostlevel == "use of force", 1, 0)) %>%
+  select(one_of(c(outcomes$name, "year", "ccode")))
+
+comp = lapply(1:nrow(pred_pars), function(i) {
+  single = data.table(fits_single[[i]],
+    data[year == pred_pars$hold_out[i], "ccode", with = FALSE])
+  multi = data.table(fits_multi[[i]],
+    data[year == pred_pars$hold_out[i], "ccode", with = FALSE])
+  preds = merge(melt(single, id.vars = "ccode", value.name = "single.pred"),
+    melt(multi, id.vars = "ccode", value.name = "multi.pred"), by = c("ccode", "variable"))
+  obs = melt(data[year == pred_pars$hold_out[i],
+    colnames(data) %in% c(outcomes$name, "ccode"), with = FALSE],
+    id.vars = "ccode", value.name = "obs")
+  merge(obs, preds, by = c("ccode", "variable")) %>%
+    group_by(variable) %>%
+    summarize("single.error" = mean(abs(single.pred - obs), na.rm = TRUE),
+      "multi.error" = mean(abs(multi.pred - obs), na.rm = TRUE)) %>%
+    data.table("year" = pred_pars$hold_out[i])
+})
+comp = rbindlist(comp)
+
+ggplot(melt(comp, id.vars = c("variable", "year"),
+  variable.name = "method"), aes(year, value, color = method)) + geom_smooth(se = FALSE) +
+  facet_wrap(~ variable, scales = "free")
+
+
 
 ## univariate partial dependence
 pd_reg = makeRegistry("pd_registry", packages = "mmpf", seed = seed)

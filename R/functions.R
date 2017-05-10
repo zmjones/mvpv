@@ -133,13 +133,12 @@ estimate = function(year, x, covariates = TRUE, hold_out = NULL,
       }
     )
     if (!is.null(hold_out)) {
-      return(do.call("cbind",
-        lapply(fit, function(m) {
-          if (m@responses@is_ordinal) {
+      return(do.call("cbind", lapply(fit, function(m) {
+          if (m@responses@is_ordinal | m@responses@is_nominal) {
             do.call("rbind",
               predict(m, newdata = data$df[data$df$year == hold_out, ], type = "prob"))
           } else {
-            return(predict(m, newdata = data$df[data$df$year == hold_out, ]))
+            predict(m, newdata = data$df[data$df$year == hold_out, ])
           }
         })
       ))
@@ -147,59 +146,6 @@ estimate = function(year, x, covariates = TRUE, hold_out = NULL,
       return(fit)
     }
   }
-}
-
-contrast_error = function(x, year, hold_out) {
-  load(paste0(dir_prefix, "results/fits_single_", x, "_", year, "_", hold_out, ".RData"))
-  single = tmp
-  load(paste0(dir_prefix, "results/fits_multi_", x, "_", year, "_", hold_out, ".RData"))
-  multi = tmp
-
-  data = read.csv(paste0("../data/", year, "_2008_rep.csv"),
-    stringsAsFactors = TRUE)
-  data = preprocess(data, regime$name)$df
-  data = data[data$year == hold_out, ]
-
-  single = compute_error(data, single)
-  single$method = "individual models"
-  multi = compute_error(data, multi)
-  multi$method = "multivariate model"
-  plt = rbind(sing, multi)
-
-  p = ggplot(plt, aes(year, med, color = method)) +
-    geom_point() +
-    geom_errorbar(aes(ymin = lwr, ymax = upr)) +
-    facet_wrap(~ variable, scales = "free_y")
-  ## save plot
-}
-
-compute_error = function(data, preds, contrast = function(x, y) abs(x - y)) {
-  ## compute mean error using contrast function for each outcome variable
-  preds = preds %>%
-    select(one_of(outcomes$name)) %>%
-    rename(use.of.force = max_hostlevel.use.of.force)
-
-  data = data %>%
-    mutate(use.of.force = ifelse(max_hostlevel == "use of force", 1, 0)) %>%
-    select(one_of(c(colnames(preds), "year")))
-
-  errors = as.data.frame(matrix(NA, nrow(preds), ncol(preds)))
-  colnames(errors) = colnames(preds)
-
-  for (x in colnames(preds)) {
-    errors[, x] = contrast(preds[, x], data[, x])
-  }
-  errors$year = data$year
-
-  ## compute .25, .5, and .75 quantiles for abs errors
-  errors %>%
-    gather(variable, error, -year) %>%
-    group_by(year, variable) %>%
-    summarise(
-      lwr = quantile(error, .25),
-      med = quantile(error, .5),
-      upr = quantile(error, .75)) %>%
-    ungroup()
 }
 
 univariate_pd = function(x, year, n, p = .25) {
