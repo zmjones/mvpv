@@ -187,22 +187,56 @@ fearon_elf = fread(paste0(data_prefix, "fearon_elf.csv")) %>%
 idea = read.dta(paste0(data_prefix, "idea.dta")) %>%
   select(year, ccode = gwno, violent_protest = violprot_idea,
     nonviolent_protest = nonvprot_idea) %>%
-  mutate_each(funs(as.integer)) %>%
+  mutate_all(funs(as.integer)) %>%
   filter(year <= 2004 & !is.na(ccode) & ccode != 9999999) %>%
   filter(!(is.na(violent_protest) & is.na(nonviolent_protest)))
 idea$ccode[idea$ccode == 255 & idea$year >= 1990] = 260
 idea$ccode[idea$ccode == 679] = 678
 
 ## banks data (via yon)
-banks = read.dta(paste0(data_prefix, "banks_wilson.dta")) %>%
-  select(year, ccode = gwno,
-    violent_protest = violprot_banks,
-    nonviolent_protest = nonvprot_banks) %>%
-  mutate_each(funs(as.integer)) %>%
-  filter(year > 2004)
+## banks = read.dta(paste0(data_prefix, "banks_wilson.dta")) %>%
+##   select(year, ccode = gwno,
+##     violent_protest = violprot_banks,
+##     nonviolent_protest = nonvprot_banks) %>%
+##   mutate_each(funs(as.integer)) %>%
+##   filter(year > 2004)
+
+## icews from
+## https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/28075
+## from 2005 to 2008
+icews.2008 = fread(paste0(data_prefix, "events.2008.20150313084156.tab"))
+icews.2007 = fread(paste0(data_prefix, "events.2007.20150313083959.tab"))
+icews.2006 = fread(paste0(data_prefix, "events.2006.20150313083752.tab"))
+icews.2005 = fread(paste0(data_prefix, "events.2005.20150313083555.tab"))
+icews = rbind(icews.2005, icews.2006, icews.2007, icews.2008)
+icews = icews %>% select("date" = "Event Date", "source" = "Source Name",
+  "target" = "Target Country", "code" = "CAMEO Code", "target.type" = "Target Sectors",
+  "source.type" = "Source Sectors") %>%
+  mutate(nonviolent_protest = ifelse(code %in% 140:144, 1, 0),
+    violent_protest = ifelse(code == 145, 1, 0)) %>%
+  filter(!(grepl("Government|Military|Army|Police|Unspecified|Unidentified", source.type) & !grepl("International Government Organization|Out of Government", source.type))) %>%
+  filter(grepl("Government|In Government|Military|Army|Police", target.type) &
+           !grepl("International Government Organization|Out of Government", target.type)) %>%
+  filter(nonviolent_protest == 1 | violent_protest == 1) %>%
+  mutate(date = ymd(date), year = year(date)) %>%
+  group_by(target, year) %>%
+  summarize(violent_protest = sum(violent_protest),
+    nonviolent_protest = sum(nonviolent_protest)) %>%
+  mutate(ccode = countrycode(target, "country.name", "cown", warn = FALSE)) %>%
+  group_by(year) %>%
+  mutate(nonviolent_protest = ifelse(target == "China",
+    sum(nonviolent_protest[target %in% c("Macao", "China", "Hong Kong")], na.rm = TRUE),
+    nonviolent_protest),
+    violent_protest = ifelse(target == "China", sum(violent_protest[target %in% c("Macao", "China", "Hong Kong")], na.rm = TRUE), violent_protest),
+    ccode = case_when(target == "Serbia" ~ 345L, TRUE ~ ccode)) %>%
+  select(year, ccode, violent_protest, nonviolent_protest) %>%
+  filter(!is.na(ccode))
 
 ## combine idea and banks counts (banks inserted starting in 2004)
-protest = rbind(idea, banks)
+## protest = rbind(idea, banks)
+
+## combine idea and icews data
+protest = rbind(idea, icews)
 
 ## join everything together
 data_list = list(gw, fariss, gtd, mid, ucdp_conflict, uds_xpolity,
@@ -222,6 +256,8 @@ df = df %>% mutate(
   terror_events = ifelse(is.na(terror_events) & year >= 1970, 0, terror_events),
   osv_deaths = ifelse(is.na(osv_deaths) & year >= 1989, 0, osv_deaths),
   nsv_deaths = ifelse(is.na(nsv_deaths) & year >= 1989, 0, nsv_deaths),
+  violent_protest = ifelse(is.na(violent_protest), 0, violent_protest),
+  nonviolent_protest = ifelse(is.na(nonviolent_protest), 0, nonviolent_protest),
   ## xrcomp = factor(xrcomp, labels = xrcomp_labels),
   ## xropen = factor(xropen, labels = xropen_labels),
   ## xrreg = factor(xrreg, labels = xrreg_labels),

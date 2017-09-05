@@ -95,17 +95,18 @@ comp = lapply(1:nrow(pred_pars), function(i) {
     id.vars = "ccode", value.name = "obs")
   merge(obs, preds, by = c("ccode", "variable")) %>%
     group_by(variable) %>%
-    summarize("single.error" = mean(abs(single.pred - obs), na.rm = TRUE),
-      "multi.error" = mean(abs(multi.pred - obs), na.rm = TRUE)) %>%
+    summarize("single.error" = median(abs(single.pred - obs), na.rm = TRUE),
+      "multi.error" = median(abs(multi.pred - obs), na.rm = TRUE)) %>%
     data.table("year" = pred_pars$hold_out[i])
 })
 comp = rbindlist(comp)
 
 ggplot(melt(comp, id.vars = c("variable", "year"),
-  variable.name = "method"), aes(year, value, color = method)) + geom_smooth(se = FALSE) +
-  facet_wrap(~ variable, scales = "free")
-
-
+  variable.name = "method"), aes(year, value, color = method)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  facet_wrap(~ variable, scales = "free_y") +
+  scale_x_continuous(breaks = seq(1970, 2010, by = 4))
 
 ## univariate partial dependence
 pd_reg = makeRegistry("pd_registry", packages = "mmpf", seed = seed)
@@ -154,4 +155,4 @@ invisible(lapply(data, regime_density))
 
 ## outcome variable correlation heatmap
 invisible(lapply(data, function(x)
-  outcome_cor(x[, which(colnames(x) %in% c(outcomes$name, "year"))])))
+  outcome_cor(x[, which(colnames(x) %in% c(outcomes$name, "year")), with = FALSE])))
