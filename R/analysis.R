@@ -113,7 +113,7 @@ pd_reg = makeRegistry("pd_registry", packages = "mmpf", seed = seed)
 pd_reg$cluster.functions = makeClusterFunctionsTORQUE("template.tmpl")
 batchExport(list(dir_prefix = dir_prefix), reg = pd_reg)
 batchMap(univariate_pd, x = pars$x, year = pars$year,
-  more.args = list(n = c(10, NA), p = .1), reg = pd_reg)
+  more.args = list(n = c(10, NA), p = 1), reg = pd_reg)
 submitJobs(resources = resources, reg = pd_reg)
 waitForJobs(reg = pd_reg)
 pd = reduceResultsList(findDone(reg = pd_reg), reg = pd_reg)
