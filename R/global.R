@@ -1,5 +1,4 @@
 regime = list(
-  ## c("part", "Polyarchy"),
   c("xpolity_nas", "X-Polity"),
   c("xpolity", "X-Polity (w/ missing categories)"),
   c("uds_xpolity", "X-UDS"))

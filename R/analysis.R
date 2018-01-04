@@ -1,5 +1,6 @@
 seed = 1987
 set.seed(seed)
+debug = FALSE
 
 ## load and preprocess data
 pkgs = c("party", "mmpf", "stringr", "batchtools", "ggplot2", "data.table")
@@ -24,7 +25,7 @@ pars = CJ(x = regime$name, year = c(1970, 1990))
 fit_bv_reg = makeRegistry("fit_bv_registry", packages = "party", seed = seed)
 ## the default is now for a desktop
 ## fit_bv_reg$cluster.functions = makeClusterFunctionsTORQUE("template.tmpl")
-fit_bv_reg$cluster.functions = makeClusterFunctionsMulticore(cores)
+fit_bv_reg$cluster.functions = makeClusterFunctionsSocket(cores)
 batchMap(estimate, x = pars$x, year = pars$year, more.args = list(covariates = FALSE))
 batchExport(list(preprocess = preprocess, dir_prefix = dir_prefix,
   data_prefix = data_prefix, outcomes = outcomes,
@@ -41,11 +42,13 @@ fits_bv = lapply(fits_bv, function(x) {
 bv_plots = lapply(fits_bv, plot_bivariate, label = "Bivariate Prediction", separate = FALSE)
 write_figures(unlist(bv_plots, FALSE), pars, label = "bv")
 write_results(fits_bv, pars, "fit_bv")
+rm(fits_bv)
+gc()
 
 ## fit models
 fit_reg = makeRegistry("fit_registry", packages = "party", seed = seed)
 ## fit_reg$cluster.functions = makeClusterFunctionsTORQUE("template.tmpl")
-fit_reg$cluster.functions = makeClusterFunctionsMulticore(cores)
+fit_reg$cluster.functions = makeClusterFunctionsSocket(cores)
 batchMap(estimate, x = pars$x, year = pars$year)
 batchExport(list(preprocess = preprocess, dir_prefix = dir_prefix,
   data_prefix = data_prefix, outcomes = outcomes,
@@ -56,70 +59,13 @@ submitJobs(reg = fit_reg)
 waitForJobs(reg = fit_reg)
 fits = reduceResultsList(findDone(reg = fit_reg), reg = fit_reg)
 write_results(fits, pars, "fit")
-
-## fit/predict multi target models for comparison
-## for each start year and regime variable combination
-## iteratively hold out each year from start year + 1 to 2008
-## and compute predictions for that year 
-pred_pars = rbind(
-  CJ(x = regime$name, year = 1970, hold_out = 1971:2008),
-  CJ(x = regime$name, year = 1990, hold_out = 1991:2008)
-)
-
-## fit_multi_reg = makeRegistry("fit_multi_registry", packages = pkgs, seed = seed)
-## ## fit_multi_reg$cluster.functions = makeClusterFunctionsTorque("template.tmpl")
-## fit_multi_reg$cluster.functions = makeClusterFunctionsMulticore(cores)
-## batchMap(estimate, x = pred_pars$x, year = pred_pars$year, hold_out = pred_pars$hold_out)
-## submitJobs(reg = fit_multi_reg, resources = resources)
-## waitForJobs(reg = fit_multi_reg)
-## fits_multi = reduceResultsList(reg = fit_multi_reg)
-## ## stack using start year and regime
-## write_results(fits_multi, pred_pars, "fits_multi")
-
-## fit/predict single target models for comparison
-## fit_single_reg = makeRegistry("fit_single_registry", packages = pkgs, seed = seed)
-## fit_single_reg$cluster.functions = makeClusterFunctionsTorque("template.tmpl")
-## batchMap(estimate, x = pred_pars$x, year = pred_pars$year, hold_out = pred_pars$hold_out,
-##   more.args = list(multivariate = FALSE))
-## submitJobs(reg = fit_single_reg, resources = resources)
-## waitForJobs(reg = fit_single_reg)
-## fits_single = reduceResultsList(reg = fit_single_reg)
-## write_results(fits_single, pred_pars, "fits_single")
-
-## compute errors and create a comparison plot
-data = fread(paste0(dir_prefix, "data/1970_2008_rep.csv")) %>%
-  mutate(max_hostlevel.use.of.force = ifelse(max_hostlevel == "use of force", 1, 0)) %>%
-  select(one_of(c(outcomes$name, "year", "ccode")))
-
-## comp = lapply(1:nrow(pred_pars), function(i) {
-##   single = data.table(fits_single[[i]],
-##     data[year == pred_pars$hold_out[i], "ccode", with = FALSE])
-##   multi = data.table(fits_multi[[i]],
-##     data[year == pred_pars$hold_out[i], "ccode", with = FALSE])
-##   preds = merge(melt(single, id.vars = "ccode", value.name = "single.pred"),
-##     melt(multi, id.vars = "ccode", value.name = "multi.pred"), by = c("ccode", "variable"))
-##   obs = melt(data[year == pred_pars$hold_out[i],
-##     colnames(data) %in% c(outcomes$name, "ccode"), with = FALSE],
-##     id.vars = "ccode", value.name = "obs")
-##   merge(obs, preds, by = c("ccode", "variable")) %>%
-##     group_by(variable) %>%
-##     summarize("single.error" = median(abs(single.pred - obs), na.rm = TRUE),
-##       "multi.error" = median(abs(multi.pred - obs), na.rm = TRUE)) %>%
-##     data.table("year" = pred_pars$hold_out[i])
-## })
-## comp = rbindlist(comp)
-
-## ggplot(melt(comp, id.vars = c("variable", "year"),
-##   variable.name = "method"), aes(year, value, color = method)) +
-##   geom_point() +
-##   geom_smooth(se = FALSE) +
-##   facet_wrap(~ variable, scales = "free_y") +
-##   scale_x_continuous(breaks = seq(1970, 2010, by = 4))
+rm(fits)
+gc()
 
 ## univariate partial dependence
 pd_reg = makeRegistry("pd_registry", packages = "mmpf", seed = seed)
 ## pd_reg$cluster.functions = makeClusterFunctionsTORQUE("template.tmpl")
-pd_reg$cluster.functions = makeClusterFunctionsMulticore(cores)
+pd_reg$cluster.functions = makeClusterFunctionsSocket(cores)
 batchExport(list(dir_prefix = dir_prefix), reg = pd_reg)
 batchMap(univariate_pd, x = pars$x, year = pars$year,
   more.args = list(n = c(10, NA), p = 1), reg = pd_reg)
@@ -143,7 +89,7 @@ write_figures(pd_plots, pars, "pd")
 ## bivariate partial dependence
 pd_int_reg = makeRegistry("pd_int_registry", packages = "mmpf", seed = seed)
 ## pd_int_reg$cluster.functions = makeClusterFunctionsTORQUE("template.tmpl")
-pd_int_reg$cluster.functions = makeClusterFunctionsMulticore(cores)
+pd_int_reg$cluster.functions = makeClusterFunctionsSocket(cores)
 batchExport(list(dir_prefix = dir_prefix), reg = pd_int_reg)
 ## not computing all of them right now
 ## pars = CJ(x = regime$name, year = c(1970, 1990), z = explanatory$name)
